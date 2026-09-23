@@ -188,7 +188,44 @@ describe('Cost overview e2e (real auth guard + temp SQLite)', () => {
   it('answers an empty overview for a user without trips', async () => {
     db.prepare("INSERT INTO users (id, username, email, password_hash, role, password_version) VALUES (4, 'new', 'new@example.test', 'x', 'user', 0)").run();
     const body = costsOverviewResponseSchema.parse((await get(4)).body);
-    expect(body).toEqual({ currency: 'EUR', trips: [], total: 0, categories: [], unconverted_trip_ids: [] });
+    expect(body).toEqual({
+      currency: 'EUR', trips: [], total: 0, estimated_total: 0, categories: [], people: [], unassigned: 0, participants: [], unconverted_trip_ids: [],
+    });
     expect(getRates).not.toHaveBeenCalled();
+  });
+
+  it('reads the stored estimate status and excludes it from final and person totals', async () => {
+    const estimate = db.prepare("SELECT id FROM budget_items WHERE trip_id = ? AND category = 'transport'").get(tokyo) as { id: number };
+    db.prepare("UPDATE budget_items SET cost_status = 'estimate' WHERE id = ?").run(estimate.id);
+    try {
+      const body = costsOverviewResponseSchema.parse((await get(1)).body);
+      expect(body.trips.find(t => t.trip_id === tokyo)).toMatchObject({ total: 3000, estimated_total: 12000 });
+      expect(body.estimated_total).toBe(12000);
+      expect(body.trips.find(t => t.trip_id === tokyo)!.categories.find(c => c.category === 'transport')).toMatchObject({ total: 0, estimated_total: 12000 });
+    } finally {
+      db.prepare("UPDATE budget_items SET cost_status = 'final' WHERE id = ?").run(estimate.id);
+    }
+  });
+
+  it('splits the costs per person, with the rest unassigned', async () => {
+    db.prepare("INSERT INTO settings (user_id, key, value) VALUES (1, 'default_currency', '\"EUR\"')").run();
+    db.prepare("UPDATE users SET avatar = 'a.png' WHERE id = 2").run();
+    const hotel = db.prepare("SELECT id FROM budget_items WHERE trip_id = ? AND category = 'accommodation'").get(rome) as { id: number };
+    db.prepare('INSERT INTO budget_item_members (budget_item_id, user_id) VALUES (?, 1), (?, 2)').run(hotel.id, hotel.id);
+
+    const body = costsOverviewResponseSchema.parse((await get(1)).body);
+    expect(body.participants).toEqual([
+      { user_id: 1, username: 'owner', avatar_url: null },
+      { user_id: 2, username: 'partner', avatar_url: '/uploads/avatars/a.png' },
+    ]);
+    const rm = body.trips.find((t) => t.trip_id === rome)!;
+    expect(rm.people).toEqual([
+      { user_id: 1, total: 100, display_total: 100 },
+      { user_id: 2, total: 100, display_total: 100 },
+    ]);
+    expect(rm.unassigned).toEqual({ total: 206.5, display_total: 206.5 });
+    expect(body.trips.find((t) => t.trip_id === tokyo)!.people).toEqual([]);
+    expect(body.people).toEqual([{ user_id: 1, total: 100 }, { user_id: 2, total: 100 }]);
+    expect(body.unassigned).toBe(306.5);
   });
 });

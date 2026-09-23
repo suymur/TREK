@@ -7,8 +7,9 @@ import EmptyState from '../components/shared/EmptyState'
 import { Spinner } from '../components/shared/Spinner'
 import { categoryLabel } from '../components/Budget/costsCategories'
 import { useCostCategoryIndex } from '../components/Budget/useCostCategories'
+import RingAvatar from '../components/Budget/BudgetPanelRingAvatar'
 import { useCostsOverview } from './costs/useCostsOverview'
-import type { OverviewTripRow, OverviewView } from './costs/costsOverviewModel'
+import type { OverviewSplit, OverviewTripRow, OverviewView } from './costs/costsOverviewModel'
 
 type T = (key: string, params?: Record<string, string | number>) => string
 
@@ -16,7 +17,7 @@ type T = (key: string, params?: Record<string, string | number>) => string
 export default function CostsOverviewPage(): React.ReactElement {
   const { t } = useTranslation()
   // Page = wiring container: loading, the "by category" switch and navigation live in the hook.
-  const { status, view, byCategory, setByCategory, retry, openTrip } = useCostsOverview()
+  const { status, view, byCategory, setByCategory, perPerson, setPerPerson, retry, openTrip } = useCostsOverview()
 
   return (
     <PageShell background="var(--bg-primary)">
@@ -28,15 +29,10 @@ export default function CostsOverviewPage(): React.ReactElement {
               <p className="text-sm mt-0.5 text-content-muted">{t('costsOverview.subtitle', { currency: view.currency })}</p>
             )}
           </div>
-          <label className="flex items-center gap-2 text-sm text-content-secondary cursor-pointer select-none">
-            <input
-              type="checkbox"
-              checked={byCategory}
-              onChange={e => setByCategory(e.target.checked)}
-              className="w-4 h-4 cursor-pointer"
-            />
-            {t('costsOverview.byCategory')}
-          </label>
+          <div className="flex items-center gap-4">
+            <Toggle checked={byCategory} onChange={setByCategory} label={t('costsOverview.byCategory')} />
+            <Toggle checked={perPerson} onChange={setPerPerson} label={t('costsOverview.perPerson', { count: view?.people.length ?? 0 })} />
+          </div>
         </div>
 
         {status === 'loading' && !view && (
@@ -60,10 +56,23 @@ export default function CostsOverviewPage(): React.ReactElement {
           <EmptyState scene="costs" title={t('costsOverview.empty')} />
         )}
         {status === 'ready' && view && view.rows.length > 0 && (
-          <OverviewTable view={view} byCategory={byCategory} onOpen={openTrip} t={t} />
+          <OverviewTable view={view} byCategory={byCategory} perPerson={perPerson} onOpen={openTrip} t={t} />
         )}
       </div>
     </PageShell>
+  )
+}
+
+function Toggle({ checked, onChange, label }: {
+  checked: boolean
+  onChange: (checked: boolean) => void
+  label: string
+}): React.ReactElement {
+  return (
+    <label className="flex items-center gap-2 text-sm text-content-secondary cursor-pointer select-none">
+      <input type="checkbox" checked={checked} onChange={e => onChange(e.target.checked)} className="w-4 h-4 cursor-pointer" />
+      {label}
+    </label>
   )
 }
 
@@ -91,37 +100,78 @@ function Amount({ amount, original, t, strong = false }: {
   )
 }
 
-function OverviewTable({ view, byCategory, onOpen, t }: {
+/** Which split columns the table shows; null when "Per person" is off. */
+interface SplitColumns {
+  showUnassigned: boolean
+}
+
+/** The per-person cells of one line (and the unassigned cell), or nothing when the split is off. */
+function SplitCells({ split, cols, strong = false }: {
+  split: OverviewSplit
+  cols: SplitColumns | null
+  strong?: boolean
+}): React.ReactElement | null {
+  if (!cols) return null
+  const cls = `px-3 text-right tabular-nums whitespace-nowrap ${strong ? 'font-medium text-content' : 'text-content-secondary'}`
+  return (
+    <>
+      {split.people.map((cell, i) => (
+        <td key={i} className={cls}>{cell ?? <span className="text-content-faint">–</span>}</td>
+      ))}
+      {cols.showUnassigned && <td className={cls}>{split.unassigned}</td>}
+    </>
+  )
+}
+
+function OverviewTable({ view, byCategory, perPerson, onOpen, t }: {
   view: OverviewView
   byCategory: boolean
+  perPerson: boolean
   onOpen: (tripId: number) => void
   t: T
 }): React.ReactElement {
+  const cols: SplitColumns | null = perPerson ? { showUnassigned: view.showUnassigned } : null
   return (
     <>
-      <div className="rounded-xl border overflow-hidden border-edge bg-surface-card">
+      <div className="rounded-xl border overflow-x-auto border-edge bg-surface-card">
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b border-edge text-xs text-content-muted">
               <th scope="col" className="px-4 py-2 text-left font-medium">{t('costsOverview.trip')}</th>
               <th scope="col" className="px-4 py-2 text-right font-medium">{t('costsOverview.expenses')}</th>
-              <th scope="col" className="px-4 py-2 text-right font-medium">{t('costsOverview.total')}</th>
+              {cols && view.people.map(p => (
+                <th key={p.userId} scope="col" className="px-3 py-2 text-right font-medium">
+                  <span className="inline-flex items-center gap-1.5 whitespace-nowrap">
+                    <RingAvatar userId={p.userId} username={p.name} avatarUrl={p.avatarUrl} size={20} innerBg="var(--bg-card)" textColor="var(--text-primary)" />
+                    {p.name}
+                  </span>
+                </th>
+              ))}
+              {cols?.showUnassigned && (
+                <th scope="col" className="px-3 py-2 text-right font-medium">{t('costsOverview.unassigned')}</th>
+              )}
+              <th scope="col" className="px-4 py-2 text-right font-medium">{t('costsOverview.final')}</th>
+              <th scope="col" className="px-4 py-2 text-right font-medium">{t('costsOverview.estimated')}</th>
             </tr>
           </thead>
           {view.rows.map(row => (
-            <TripRows key={row.tripId} row={row} byCategory={byCategory} onOpen={onOpen} t={t} />
+            <TripRows key={row.tripId} row={row} byCategory={byCategory} cols={cols} onOpen={onOpen} t={t} />
           ))}
           <tfoot className="border-t-2 border-edge bg-surface-secondary">
             <tr>
               <th scope="row" className="px-4 py-3 text-left font-semibold text-content">{t('costsOverview.allTrips')}</th>
               <td />
+              <SplitCells split={view.totals} cols={cols} strong />
               <td className="px-4 py-3"><Amount amount={view.totals.amount} original={null} t={t} strong /></td>
+              <td className="px-4 py-3"><Amount amount={view.totals.estimated} original={null} t={t} strong /></td>
             </tr>
             {byCategory && view.totals.categories.map(c => (
               <tr key={c.category}>
                 <td className="pl-8 pr-4 py-1.5"><CategoryName category={c.category} t={t} /></td>
                 <td />
+                <SplitCells split={c} cols={cols} />
                 <td className="px-4 py-1.5"><Amount amount={c.amount} original={null} t={t} /></td>
+                <td className="px-4 py-1.5"><Amount amount={c.estimated} original={null} t={t} /></td>
               </tr>
             ))}
           </tfoot>
@@ -134,9 +184,10 @@ function OverviewTable({ view, byCategory, onOpen, t }: {
   )
 }
 
-function TripRows({ row, byCategory, onOpen, t }: {
+function TripRows({ row, byCategory, cols, onOpen, t }: {
   row: OverviewTripRow
   byCategory: boolean
+  cols: SplitColumns | null
   onOpen: (tripId: number) => void
   t: T
 }): React.ReactElement {
@@ -161,13 +212,17 @@ function TripRows({ row, byCategory, onOpen, t }: {
           </div>
         </td>
         <td className="px-4 py-3 text-right tabular-nums text-content-muted">{row.itemCount}</td>
+        <SplitCells split={row} cols={cols} strong />
         <td className="px-4 py-3"><Amount amount={row.amount} original={row.original} t={t} strong /></td>
+        <td className="px-4 py-3"><Amount amount={row.estimated} original={row.estimatedOriginal} t={t} strong /></td>
       </tr>
       {byCategory && row.categories.map(c => (
         <tr key={c.category} className="cursor-pointer hover:bg-surface-hover" onClick={() => onOpen(row.tripId)}>
           <td className="pl-8 pr-4 py-1.5"><CategoryName category={c.category} t={t} /></td>
           <td />
+          <SplitCells split={c} cols={cols} />
           <td className="px-4 py-1.5"><Amount amount={c.amount} original={c.original} t={t} /></td>
+          <td className="px-4 py-1.5"><Amount amount={c.estimated} original={c.estimatedOriginal} t={t} /></td>
         </tr>
       ))}
     </tbody>

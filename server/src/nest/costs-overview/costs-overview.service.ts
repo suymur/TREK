@@ -7,12 +7,14 @@ import { AddonsService } from '../addons/addons.service';
 import { ExchangeRatesService } from '../budget/exchange-rates.service';
 import { CostCategoriesService } from '../cost-categories/cost-categories.service';
 import { ADDON_IDS } from '../../addons';
+import { avatarUrl } from '../common/avatarUrl';
 import {
   buildCostsOverview,
   needsLiveRates,
   resolveOverviewCurrency,
   tripCurrencyOf,
   type OverviewItemRow,
+  type OverviewMemberRow,
   type OverviewTripRow,
 } from './costs-overview.helpers';
 
@@ -46,14 +48,14 @@ export class CostsOverviewService {
     const tripIds = this.membership.listAccessibleTripIds(userId);
     const trips = this.loadTrips(tripIds);
     const items = this.loadItems(tripIds);
+    const members = this.loadMembers(tripIds);
     const display = resolveOverviewCurrency(
       this.settings.getUserSettings(userId).default_currency,
       trips.map(tripCurrencyOf),
     );
     const rates = needsLiveRates(trips, items, display) ? await this.exchangeRates.getRates(display) : null;
-    // Custom categories group under their own key, in their sort order (#4).
     const customIds = this.costCategories.list().map((c) => c.id);
-    return buildCostsOverview(trips, items, display, rates, customIds);
+    return buildCostsOverview(trips, items, members, display, rates, customIds);
   }
 
   /** The trip rows in the order of `ids` (newest first). */
@@ -70,10 +72,30 @@ export class CostsOverviewService {
   private loadItems(ids: number[]): OverviewItemRow[] {
     if (ids.length === 0) return [];
     return this.db.all<OverviewItemRow>(
-      `SELECT trip_id, category, total_price, currency, exchange_rate FROM budget_items WHERE trip_id IN (${placeholders(ids)})`,
+      `SELECT id, trip_id, category, total_price, currency, exchange_rate, cost_status FROM budget_items WHERE trip_id IN (${placeholders(ids)})`,
       ...ids,
     );
   }
+
+  private loadMembers(ids: number[]): OverviewMemberRow[] {
+    if (ids.length === 0) return [];
+    return this.db
+      .all<Omit<OverviewMemberRow, 'avatar_url'> & { avatar: string | null }>(memberSql(ids), ...ids)
+      .map(({ avatar, ...m }) => ({ ...m, avatar_url: avatarUrl({ avatar }) }));
+  }
+}
+
+/**
+ * Who takes part in each expense of these trips, with the name and avatar the
+ * Costs tab shows (display name first).
+ */
+function memberSql(ids: number[]): string {
+  return `
+    SELECT bm.budget_item_id, bm.user_id, bm.amount, COALESCE(u.display_name, u.username) AS username, u.avatar
+    FROM budget_item_members bm
+    JOIN budget_items bi ON bi.id = bm.budget_item_id
+    JOIN users u ON u.id = bm.user_id
+    WHERE bi.trip_id IN (${placeholders(ids)})`;
 }
 
 /** One bound `?` per id; the ids themselves never enter the SQL text. */

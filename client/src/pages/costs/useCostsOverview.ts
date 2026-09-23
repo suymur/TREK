@@ -8,8 +8,8 @@ import { useCostCategorySync } from '../../components/Budget/useCostCategories'
 
 /**
  * Data hook of the cost overview (#2), used by the desktop page and the phone
- * screen alike: loads the overview, keeps the "by category" switch, and opens a
- * trip's Costs tab.
+ * screen alike: loads the overview, keeps the "by category" and "per person"
+ * switches, and opens a trip's Costs tab.
  */
 export function useCostsOverview() {
   const navigate = useNavigate()
@@ -17,6 +17,7 @@ export function useCostsOverview() {
   const [data, setData] = useState<CostsOverviewResponse | null>(null)
   const [status, setStatus] = useState<CostsOverviewStatus>('loading')
   const [byCategory, setByCategory] = useState(false)
+  const [perPerson, setPerPerson] = useState(false)
   const [attempt, setAttempt] = useState(0)
   // Names, icons and colours of the custom categories the overview groups by (#4).
   useCostCategorySync()
@@ -43,5 +44,5 @@ export function useCostsOverview() {
   const retry = useCallback(() => setAttempt(n => n + 1), [])
   const openTrip = useCallback((tripId: number) => navigate(costsTabPath(tripId)), [navigate])
 
-  return { status, view, byCategory, setByCategory, retry, openTrip }
+  return { status, view, byCategory, setByCategory, perPerson, setPerPerson, retry, openTrip }
 }

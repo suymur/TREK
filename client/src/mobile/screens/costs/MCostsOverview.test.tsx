@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest'
 import { Routes, Route, useLocation } from 'react-router'
 import userEvent from '@testing-library/user-event'
 import { http, HttpResponse } from 'msw'
-import { render, screen } from '../../../../tests/helpers/render'
+import { render, screen, within } from '../../../../tests/helpers/render'
 import { server } from '../../../../tests/helpers/msw/server'
 import { resetAllStores, seedStore } from '../../../../tests/helpers/store'
 import { buildUser } from '../../../../tests/helpers/factories'
@@ -47,7 +47,7 @@ describe('MCostsOverview', () => {
     expect(screen.getByRole('button', { name: 'Open the costs of Rome' })).toBeInTheDocument()
     expect(screen.getByText('All trips')).toBeInTheDocument()
     expect(screen.getByText(eur(506.5))).toBeInTheDocument()
-    expect(screen.getByText(eur(100))).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Open the costs of Tokyo' })).toHaveTextContent(eur(100))
     expect(screen.queryByText('Transport')).not.toBeInTheDocument()
   })
 
@@ -84,5 +84,34 @@ describe('MCostsOverview', () => {
     renderScreen()
 
     expect(await screen.findByText('You have no trips yet.')).toBeInTheDocument()
+  })
+
+  it('FE-M-COSTS-006: the "Per person" switch lists each participant under every figure', async () => {
+    const user = userEvent.setup()
+    renderScreen()
+    const rome = await screen.findByRole('button', { name: 'Open the costs of Rome' })
+    expect(within(rome).queryByText('Alice')).not.toBeInTheDocument()
+
+    await user.click(screen.getByRole('switch', { name: 'Per person (2)' }))
+
+    // bob is not in Rome: a dash, not 0.
+    const bobLine = within(rome).getByText('bob').parentElement!
+    expect(bobLine).toHaveTextContent('–')
+    expect(within(rome).getByText('Alice').parentElement).toHaveTextContent(eur(350.5))
+    expect(within(rome).getByText('Unassigned').parentElement).toHaveTextContent(eur(56))
+    // Global: Alice across both trips.
+    expect(screen.getByText(eur(440.5))).toBeInTheDocument()
+  })
+
+  it('FE-M-COSTS-007: both switches together split each category per person', async () => {
+    const user = userEvent.setup()
+    renderScreen()
+    const tokyo = await screen.findByRole('button', { name: 'Open the costs of Tokyo' })
+
+    await user.click(screen.getByRole('switch', { name: 'Per person (2)' }))
+    await user.click(screen.getByRole('switch', { name: 'By category' }))
+
+    // Trip line + food + transport, each with an Alice line.
+    expect(within(tokyo).getAllByText('Alice')).toHaveLength(3)
   })
 })
