@@ -752,13 +752,13 @@ export class TripsService {
       const budgetMap = new Map<number, number | bigint>();
       const insertBudget = this.db.prepare(`
         INSERT INTO budget_items (trip_id, category, name, total_price, persons, days, note, sort_order,
-          reservation_id, currency, exchange_rate, expense_date, ticket_json, paid_by_user_id)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          reservation_id, currency, exchange_rate, expense_date, ticket_json, paid_by_user_id, cost_status)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `);
       for (const b of oldBudget) {
         const br = insertBudget.run(newTripId, b.category, b.name, b.total_price, b.persons, b.days, b.note, b.sort_order,
           b.reservation_id ? (reservationMap.get(b.reservation_id) ?? null) : null,
-          b.currency, b.exchange_rate ?? 1, b.expense_date, b.ticket_json, b.paid_by_user_id);
+          b.currency, b.exchange_rate ?? 1, b.expense_date, b.ticket_json, b.paid_by_user_id, b.cost_status ?? 'final');
         budgetMap.set(b.id, br.lastInsertRowid);
       }
 

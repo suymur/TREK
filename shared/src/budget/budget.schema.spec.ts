@@ -1,5 +1,7 @@
 import {
   budgetCreateItemRequestSchema,
+  budgetUpdateItemRequestSchema,
+  budgetItemSchema,
   budgetUpdateMembersRequestSchema,
   budgetToggleMemberPaidRequestSchema,
   budgetReorderItemsRequestSchema,
@@ -59,5 +61,29 @@ describe('typeToCostCategory', () => {
   it('leaves the other vehicle types on transport', () => {
     expect(typeToCostCategory('car-rental')).toBe('transport');
     expect(typeToCostCategory('taxi')).toBe('transport');
+  });
+});
+
+describe('cost_status', () => {
+  it('accepts estimate and final on create and update, and stays optional', () => {
+    expect(budgetCreateItemRequestSchema.safeParse({ name: 'Hotel', cost_status: 'estimate' }).success).toBe(true);
+    expect(budgetCreateItemRequestSchema.safeParse({ name: 'Hotel', cost_status: 'final' }).success).toBe(true);
+    expect(budgetUpdateItemRequestSchema.safeParse({ cost_status: 'final' }).success).toBe(true);
+    expect(budgetUpdateItemRequestSchema.safeParse({}).success).toBe(true);
+  });
+
+  it('rejects any other value', () => {
+    expect(budgetCreateItemRequestSchema.safeParse({ name: 'Hotel', cost_status: 'planned' }).success).toBe(false);
+    expect(budgetUpdateItemRequestSchema.safeParse({ cost_status: null }).success).toBe(false);
+    expect(
+      budgetItemSchema.safeParse({
+        id: 1,
+        trip_id: 1,
+        category: 'food',
+        name: 'x',
+        total_price: 1,
+        cost_status: 'maybe',
+      }).success,
+    ).toBe(false);
   });
 });

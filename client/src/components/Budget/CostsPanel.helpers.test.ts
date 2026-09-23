@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { calculateTicketShares, finalBudgetFor, finalBudgetSources, hasTicketSplit, paidByUser, payerSum, payersBalanced, readTicketItems, readUserNote, rebalancePayers, settlementDate, splitCents, splitEqualShares, writeTicketItems, type TicketItem } from './CostsPanel.helpers'
+import { calculateTicketShares, costStatusHintKey, costStatusTotals, isEstimate, finalBudgetFor, finalBudgetSources, hasTicketSplit, paidByUser, payerSum, payersBalanced, readTicketItems, readUserNote, rebalancePayers, settlementDate, splitCents, splitEqualShares, writeTicketItems, type TicketItem } from './CostsPanel.helpers'
 
 describe('splitCents', () => {
   it('splits evenly when it divides cleanly', () => {
@@ -308,5 +308,44 @@ describe('finalBudgetSources', () => {
   it('is empty for a participant with no activity', () => {
     expect(finalBudgetSources({ sources: { fronted: [], moved: [], outstanding: [] } }, items))
       .toEqual({ fronted: [], moved: [], outstanding: [] })
+  })
+})
+
+describe('isEstimate', () => {
+  it('reads only an explicit estimate as one; a missing status is final', () => {
+    expect(isEstimate({ cost_status: 'estimate' })).toBe(true)
+    expect(isEstimate({ cost_status: 'final' })).toBe(false)
+    expect(isEstimate({})).toBe(false)
+    expect(isEstimate({ cost_status: null })).toBe(false)
+  })
+})
+
+describe('costStatusTotals', () => {
+  it('splits final and estimated, and planned is their sum', () => {
+    const items = [
+      { id: 1, amount: 100, cost_status: 'final' },
+      { id: 2, amount: 40, cost_status: 'estimate' },
+      { id: 3, amount: 10 },
+      { id: 4, amount: -5, cost_status: 'estimate' },
+    ]
+    expect(costStatusTotals(items, e => e.amount)).toEqual({ final: 110, estimated: 35, planned: 145 })
+  })
+
+  it('is all zeroes for no expenses', () => {
+    expect(costStatusTotals([], () => 1)).toEqual({ final: 0, estimated: 0, planned: 0 })
+  })
+})
+
+describe('costStatusHintKey', () => {
+  it('tells the user the amount stays when a saved estimate turns final', () => {
+    expect(costStatusHintKey({ cost_status: 'estimate' }, 'final')).toBe('costs.status.finalHint')
+  })
+
+  it('explains estimates everywhere else', () => {
+    expect(costStatusHintKey(null, 'final')).toBe('costs.status.hint')
+    expect(costStatusHintKey(null, 'estimate')).toBe('costs.status.hint')
+    expect(costStatusHintKey({ cost_status: 'estimate' }, 'estimate')).toBe('costs.status.hint')
+    expect(costStatusHintKey({ cost_status: 'final' }, 'final')).toBe('costs.status.hint')
+    expect(costStatusHintKey({}, 'estimate')).toBe('costs.status.hint')
   })
 })

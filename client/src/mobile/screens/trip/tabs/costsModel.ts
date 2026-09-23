@@ -1,5 +1,5 @@
 import type { BudgetParticipantFinal, CostCategory } from '@trek/shared'
-import { paidByUser, readUserNote, settlementDate, splitEqualShares } from '../../../../components/Budget/CostsPanel.helpers'
+import { costStatusTotals, isEstimate, paidByUser, readUserNote, settlementDate, splitEqualShares } from '../../../../components/Budget/CostsPanel.helpers'
 import { catMeta, COST_CATEGORY_LIST } from '../../../../components/Budget/costsCategories'
 import { convertBooked } from '../../../../hooks/useExchangeRates'
 import { currencyDecimals } from '../../../../utils/formatters'
@@ -37,8 +37,12 @@ export function baseTotal(e: BudgetItem, ctx: CostsCtx): number {
   return booked(e.total_price || 0, e, ctx)
 }
 
-/** How much `ctx.me` personally fronted for this expense, in the base currency. */
+/**
+ * How much `ctx.me` personally fronted for this expense, in the base currency.
+ * An estimate has not been paid by anyone yet, whoever is pencilled in for it.
+ */
 export function myPaidOf(e: BudgetItem, ctx: CostsCtx): number {
+  if (isEstimate(e)) return 0
   return booked(paidByUser(e, ctx.me), e, ctx)
 }
 
@@ -53,8 +57,12 @@ export function memberShareOf(e: BudgetItem, userId: number, ctx: CostsCtx): num
   return booked(shares[userId] || 0, e, ctx)
 }
 
-/** `ctx.me`'s own share — the common case of {@link memberShareOf}. */
+/**
+ * `ctx.me`'s own share — the common case of {@link memberShareOf}. An estimate
+ * stays out of the settlement, so nobody owes a share of it yet.
+ */
 export function myShareOf(e: BudgetItem, ctx: CostsCtx): number {
+  if (isEstimate(e)) return 0
   return memberShareOf(e, ctx.me, ctx)
 }
 
@@ -64,7 +72,8 @@ export function myShareOf(e: BudgetItem, ctx: CostsCtx): number {
  * unfinished until its recipient is recorded as the (negative) payer.
  */
 export function isUnfinished(e: BudgetItem, ctx: CostsCtx): boolean {
-  return baseTotal(e, ctx) !== 0 && (e.payers || []).filter(p => p.amount !== 0).length === 0
+  // An estimate without a payer is a plan, not a bill someone forgot to assign.
+  return !isEstimate(e) && baseTotal(e, ctx) !== 0 && (e.payers || []).filter(p => p.amount !== 0).length === 0
 }
 
 // ── settlement (server-computed; these types describe what MCostsTab reads from it) ──
@@ -110,7 +119,14 @@ export interface CostsSettlementResponse {
 // ── hero / tile totals (spec §3.1-§3.3) ────────────────────────────────────
 
 export interface CostsTotals {
+  /** Final expenses only — what has really been spent. */
   totalSpend: number
+  /** Estimates only — planned costs that are not final yet. */
+  estimated: number
+  /** totalSpend + estimated. */
+  planned: number
+  /** How many expenses are estimates; the hero only shows estimated/planned when there is one. */
+  estimateCount: number
   myPaid: number
   myShare: number
   owe: number
@@ -120,14 +136,15 @@ export interface CostsTotals {
 }
 
 export function computeTotals(items: BudgetItem[], flows: CostsSettlementFlow[], ctx: CostsCtx): CostsTotals {
-  const totalSpend = items.reduce((a, e) => a + baseTotal(e, ctx), 0)
+  const { final: totalSpend, estimated, planned } = costStatusTotals(items, e => baseTotal(e, ctx))
   const myPaid = items.reduce((a, e) => a + myPaidOf(e, ctx), 0)
   const myShare = items.reduce((a, e) => a + myShareOf(e, ctx), 0)
   const owe = flows.filter(f => f.from.user_id === ctx.me).reduce((a, f) => a + f.amount, 0)
   const owed = flows.filter(f => f.to.user_id === ctx.me).reduce((a, f) => a + f.amount, 0)
   const outstandingItems = items.filter(e => isUnfinished(e, ctx))
   const outstanding = outstandingItems.reduce((a, e) => a + baseTotal(e, ctx), 0)
-  return { totalSpend, myPaid, myShare, owe, owed, outstanding, outstandingCount: outstandingItems.length }
+  const estimateCount = items.filter(isEstimate).length
+  return { totalSpend, estimated, planned, estimateCount, myPaid, myShare, owe, owed, outstanding, outstandingCount: outstandingItems.length }
 }
 
 // ── expenses list: filter + group (spec §3.6-§3.7) ─────────────────────────
@@ -315,7 +332,7 @@ export function buildCostsCsv(items: BudgetItem[], opts: CsvBuildOptions): { fil
     }
   }
 
-  const header = ['Date', 'Name', 'Category', 'Amount', 'Currency', `Amount (${opts.base})`, 'Note']
+  const header = ['Date', 'Name', 'Category', 'Amount', 'Currency', `Amount (${opts.base})`, 'Note', 'Status']
   const rows = [header.join(sep)]
   const sorted = items.slice().sort((a, b) => (a.expense_date || '').localeCompare(b.expense_date || ''))
   for (const e of sorted) {
@@ -330,6 +347,7 @@ export function buildCostsCsv(items: BudgetItem[], opts: CsvBuildOptions): { fil
         cur,
         baseTotal(e, opts.ctx).toFixed(currencyDecimals(opts.base)),
         esc(note),
+        isEstimate(e) ? 'estimate' : 'final',
       ].join(sep),
     )
   }

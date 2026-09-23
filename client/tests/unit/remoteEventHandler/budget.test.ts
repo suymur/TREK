@@ -48,6 +48,14 @@ describe('remoteEventHandler > budget', () => {
     expect(item?.total_price).toBe(500);
   });
 
+  it('FE-WSEVT-BUDGET-003b: budget:updated carries the estimate / final status (fork #3)', () => {
+    seedData();
+    useTripStore.getState().handleRemoteEvent({ type: 'budget:updated', item: buildBudgetItem({ id: 1, cost_status: 'estimate' }) });
+    expect(useTripStore.getState().budgetItems.find(i => i.id === 1)?.cost_status).toBe('estimate');
+    useTripStore.getState().handleRemoteEvent({ type: 'budget:updated', item: buildBudgetItem({ id: 1, cost_status: 'final' }) });
+    expect(useTripStore.getState().budgetItems.find(i => i.id === 1)?.cost_status).toBe('final');
+  });
+
   it('FE-WSEVT-BUDGET-004: budget:deleted removes item by ID', () => {
     seedData();
     useTripStore.getState().handleRemoteEvent({ type: 'budget:deleted', itemId: 1 });

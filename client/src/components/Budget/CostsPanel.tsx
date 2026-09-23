@@ -18,10 +18,10 @@ import CustomSelect from '../shared/CustomSelect'
 import { CustomDatePicker } from '../shared/CustomDateTimePicker'
 import { localToday } from '../Planner/today'
 import { SYMBOLS, currenciesWith, SPLIT_COLORS } from './BudgetPanel.constants'
-import { amountPattern, calculateTicketShares, finalBudgetFor, finalBudgetSources, hasTicketSplit, NOTE_MAX, paidByUser, payersBalanced, readTicketItems, readUserNote, rebalancePayers, settlementDate, splitEqualShares, writeTicketItems, type TicketItem } from './CostsPanel.helpers'
+import { amountPattern, calculateTicketShares, costStatusHintKey, costStatusTotals, finalBudgetFor, isEstimate, finalBudgetSources, hasTicketSplit, NOTE_MAX, paidByUser, payersBalanced, readTicketItems, readUserNote, rebalancePayers, settlementDate, splitEqualShares, writeTicketItems, type TicketItem } from './CostsPanel.helpers'
 import { COST_CATEGORY_LIST, catMeta } from './costsCategories'
 import { ReceiptPreviewModal } from './ReceiptPreviewModal'
-import type { BudgetParticipantFinal } from '@trek/shared'
+import { COST_STATUSES, type BudgetParticipantFinal, type CostStatus } from '@trek/shared'
 import type { BudgetItem, BudgetItemReceipt } from '../../types'
 import type { TripMember } from './BudgetPanelMemberChips'
 import GuestBadge from '../shared/GuestBadge'
@@ -150,15 +150,18 @@ export default function CostsPanel({ tripId, tripMembers = [] }: CostsPanelProps
     (s: Settlement) => convertBooked(s.amount, s.currency, s.exchange_rate, tripCurrency, convert),
     [convert, tripCurrency],
   )
-  const myPaidOf = (e: BudgetItem) => booked(paidByUser(e, me), e)
+  // An estimate has not been paid by anyone yet, whoever is pencilled in for it.
+  const myPaidOf = (e: BudgetItem) => isEstimate(e) ? 0 : booked(paidByUser(e, me), e)
   // "Unfinished": a recorded total nobody has paid yet — counts toward the trip
   // total but stays out of settlements until who-paid is filled in. A negative
   // total (a refund, #2176) is just as unfinished until its recipient is named.
-  const isUnfinished = (e: BudgetItem) => baseTotal(e) !== 0 && (e.payers || []).filter(p => p.amount !== 0).length === 0
+  // An estimate without a payer is a plan, not a bill someone forgot to assign.
+  const isUnfinished = (e: BudgetItem) => !isEstimate(e) && baseTotal(e) !== 0 && (e.payers || []).filter(p => p.amount !== 0).length === 0
   const myShareOf = (e: BudgetItem) => {
     // Nobody paid, so nobody owes: the ledger skips these entirely (#2225), and
     // counting them here left the tile contradicting the balances right beside it.
-    if (isUnfinished(e)) return 0
+    // Estimates stay out of the settlement too, so nobody owes a share of one yet.
+    if (isUnfinished(e) || isEstimate(e)) return 0
     const myMember = (e.members || []).find(m => m.user_id === me)
     if (!myMember) return 0
     if (myMember.amount !== null && myMember.amount !== undefined) {
@@ -170,14 +173,17 @@ export default function CostsPanel({ tripId, tripMembers = [] }: CostsPanelProps
   }
 
   const totals = useMemo(() => {
-    const totalSpend = budgetItems.reduce((a, e) => a + baseTotal(e), 0)
+    // Total spend is the final expenses only; estimates get their own figure,
+    // and planned is the two together.
+    const { final: totalSpend, estimated, planned } = costStatusTotals(budgetItems, baseTotal)
     const myPaid = budgetItems.reduce((a, e) => a + myPaidOf(e), 0)
     const myShare = budgetItems.reduce((a, e) => a + myShareOf(e), 0)
     const owe = (settlement?.flows || []).filter(f => f.from.user_id === me).reduce((a, f) => a + f.amount, 0)
     const owed = (settlement?.flows || []).filter(f => f.to.user_id === me).reduce((a, f) => a + f.amount, 0)
     const outstanding = budgetItems.reduce((a, e) => (isUnfinished(e) ? a + baseTotal(e) : a), 0)
     const outstandingCount = budgetItems.filter(isUnfinished).length
-    return { totalSpend, myPaid, myShare, owe, owed, outstanding, outstandingCount }
+    const estimateCount = budgetItems.filter(isEstimate).length
+    return { totalSpend, estimated, planned, estimateCount, myPaid, myShare, owe, owed, outstanding, outstandingCount }
   }, [budgetItems, settlement, me])
 
   // ── filtering + day grouping ────────────────────────────────────────────
@@ -277,6 +283,10 @@ export default function CostsPanel({ tripId, tripMembers = [] }: CostsPanelProps
     try { await deleteBudgetItem(tripId, id); loadSettlement() } catch { toast.error(t('common.unknownError')) }
   }
 
+  // What a day group heads with: its final expenses, the same rule as the banner.
+  const spentOn = (entries: LedgerEntry[]) =>
+    costStatusTotals(entries.flatMap(en => en.kind === 'expense' ? [en.e] : []), baseTotal).final
+
   // CSV export of all expenses — the wiki-documented export that got lost in the
   // Costs rework (#1500). One row per expense, oldest first.
   const handleExportCsv = () => {
@@ -290,7 +300,7 @@ export default function CostsPanel({ tripId, tripMembers = [] }: CostsPanelProps
     }
     const fmtDate = (iso: string) => { if (!iso) return ''; try { return new Date(iso + 'T00:00:00Z').toLocaleDateString(locale, { day: '2-digit', month: '2-digit', year: 'numeric', timeZone: 'UTC' }) } catch { return iso } }
 
-    const header = ['Date', 'Name', 'Category', 'Amount', 'Currency', 'Amount (' + base + ')', 'Note']
+    const header = ['Date', 'Name', 'Category', 'Amount', 'Currency', 'Amount (' + base + ')', 'Note', 'Status']
     const rows = [header.join(sep)]
     const items = budgetItems.slice().sort((a, b) => (a.expense_date || '').localeCompare(b.expense_date || ''))
     for (const e of items) {
@@ -301,6 +311,7 @@ export default function CostsPanel({ tripId, tripMembers = [] }: CostsPanelProps
         (e.total_price || 0).toFixed(currencyDecimals(cur)), cur,
         baseTotal(e).toFixed(currencyDecimals(base)),
         esc(note),
+        isEstimate(e) ? 'estimate' : 'final',
       ].join(sep))
     }
 
@@ -340,7 +351,8 @@ export default function CostsPanel({ tripId, tripMembers = [] }: CostsPanelProps
   )
 
   // A prominent summary shown when a single day is selected: the day + its total.
-  const dayFilterTotal = dayFilter ? filtered.reduce((a, e) => a + baseTotal(e), 0) : 0
+  // "Spent" means final: an estimate on that day is listed, but not summed as spent.
+  const dayFilterTotal = dayFilter ? costStatusTotals(filtered, baseTotal).final : 0
   const dayFilterLabel = dayFilter
     ? (() => { try { return new Date(dayFilter + 'T00:00:00Z').toLocaleDateString(locale, { weekday: 'long', day: 'numeric', month: 'long', timeZone: 'UTC' }) } catch { return dayFilter } })()
     : ''
@@ -413,7 +425,10 @@ export default function CostsPanel({ tripId, tripMembers = [] }: CostsPanelProps
             : <span className="text-content-faint">{t('costs.allSettled')}</span>} />
         <SummaryCard label={t('costs.totalSpend')} sub={t('costs.totalSpendSub')} amount={totals.totalSpend} currency={base} locale={locale}
           icon={<BarChart3 size={18} />} tone="total"
-          foot={<span style={{ display: 'flex', gap: 16 }}><span>{t('costs.yourShare')} · <b>{fmt0(totals.myShare)}</b></span><span>{t('costs.youPaid')} · <b>{fmt0(totals.myPaid)}</b></span></span>} />
+          foot={<span style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+            <span style={{ display: 'flex', gap: 16 }}><span>{t('costs.yourShare')} · <b>{fmt0(totals.myShare)}</b></span><span>{t('costs.youPaid')} · <b>{fmt0(totals.myPaid)}</b></span></span>
+            {statusTotalsLine()}
+          </span>} />
       </div>
 
       {/* ── Main grid ── */}
@@ -458,7 +473,7 @@ export default function CostsPanel({ tripId, tripMembers = [] }: CostsPanelProps
               <EmptyState scene="costs" title={t('costs.emptyText')} />
             )
           ) : dayGroups.map(g => {
-            const dtot = g.entries.reduce((a, en) => en.kind === 'expense' ? a + baseTotal(en.e) : a, 0)
+            const dtot = spentOn(g.entries)
             return (
               <div key={g.day} style={{ marginBottom: 22 }}>
                 {!dayFilter && (
@@ -580,6 +595,19 @@ export default function CostsPanel({ tripId, tripMembers = [] }: CostsPanelProps
     </div>
   )
 
+  // The three cost totals: the big number above is the final spend, this line
+  // adds what is still estimated and the planned sum of both. A trip without a
+  // single estimate has nothing to add (planned would just repeat the total).
+  function statusTotalsLine() {
+    if (totals.estimateCount === 0) return null
+    return (
+      <span data-testid="cost-status-totals" title={t('costs.status.hint')} style={{ display: 'flex', gap: 16, flexWrap: 'wrap' }}>
+        <span>{t('costs.totalEstimated')} · <b>{fmt0(totals.estimated)}</b></span>
+        <span>{t('costs.totalPlanned')} · <b>{fmt0(totals.planned)}</b></span>
+      </span>
+    )
+  }
+
   // Settle-up and Balances both come from the one settlement request, so they
   // share the notice that says the numbers are missing rather than zero.
   function loadFailed() {
@@ -634,6 +662,7 @@ export default function CostsPanel({ tripId, tripMembers = [] }: CostsPanelProps
             <span>{t('costs.yourShare')} · <b style={{ color: '#fff', fontWeight: 600 }}>{fmt0(totals.myShare)}</b></span>
             <span>{t('costs.youPaid')} · <b style={{ color: '#fff', fontWeight: 600 }}>{fmt0(totals.myPaid)}</b></span>
           </div>
+          <div style={{ marginTop: 6, fontSize: 'calc(12px * var(--fs-scale-body, 1))', color: 'rgba(255,255,255,0.6)' }}>{statusTotalsLine()}</div>
           {canEdit && (
             <button type="button" onClick={() => { setEditing(null); setModalOpen(true) }} style={{ marginTop: 16, width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, background: 'rgba(255,255,255,0.14)', border: '1px solid rgba(255,255,255,0.16)', color: '#fff', padding: 13, borderRadius: 14, fontSize: 'calc(14px * var(--fs-scale-body, 1))', fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}>
               <Plus size={17} /> {t('costs.addExpense')}
@@ -707,7 +736,7 @@ export default function CostsPanel({ tripId, tripMembers = [] }: CostsPanelProps
           {dayGroups.length === 0
             ? <div className="text-content-faint" style={{ textAlign: 'center', padding: '36px 16px', fontSize: 'calc(13px * var(--fs-scale-body, 1))' }}>{search ? t('costs.noMatch') : t('costs.emptyText')}</div>
             : dayGroups.map(g => {
-                const dtot = g.entries.reduce((a, en) => en.kind === 'expense' ? a + baseTotal(en.e) : a, 0)
+                const dtot = spentOn(g.entries)
                 return (
                   <div key={g.day} style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                     {!dayFilter && <div className={labelCls} style={{ display: 'flex', alignItems: 'center', padding: '0 2px' }}>{g.day}<span className="text-content-muted" style={{ marginLeft: 'auto', textTransform: 'none', letterSpacing: 0, fontWeight: 500, fontSize: 'calc(11.5px * var(--fs-scale-caption, 1))' }}>{t('costs.spent', { amount: fmt(dtot) })}</span></div>}
@@ -772,6 +801,7 @@ export default function CostsPanel({ tripId, tripMembers = [] }: CostsPanelProps
     const payers = (e.payers || []).filter(p => p.amount !== 0)
     const net = round2(myPaidOf(e) - myShareOf(e))
     const unfinished = isUnfinished(e)
+    const estimate = isEstimate(e)
     const note = readUserNote(e)
     const open = expandedNoteId === e.id
 
@@ -804,6 +834,11 @@ export default function CostsPanel({ tripId, tripMembers = [] }: CostsPanelProps
         <div style={{ minWidth: 0 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 7, minWidth: 0 }}>
             <span className="text-content" style={{ fontSize: 'calc(15px * var(--fs-scale-subtitle, 1))', fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{e.name}</span>
+            {estimate && (
+              <span data-testid="estimate-chip" title={t('costs.status.hint')} className="bg-surface-secondary border border-edge text-content-muted" style={{ display: 'inline-flex', alignItems: 'center', padding: '1px 8px', borderRadius: 999, borderStyle: 'dashed', fontSize: 'calc(11px * var(--fs-scale-caption, 1))', fontWeight: 700, flexShrink: 0 }}>
+                {t('costs.status.estimateShort')}
+              </span>
+            )}
             {unfinished && !isMobile && (
               <span title={t('costs.unfinishedHint')} style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '2px 8px 2px 6px', borderRadius: 999, background: 'rgba(217,119,6,0.14)', color: '#d97706', fontSize: 'calc(11px * var(--fs-scale-caption, 1))', fontWeight: 700, flexShrink: 0 }}>
                 <span style={{ width: 14, height: 14, borderRadius: '50%', background: '#d97706', color: '#fff', display: 'grid', placeItems: 'center', fontSize: 'calc(10px * var(--fs-scale-caption, 1))', fontWeight: 800 }}>!</span>
@@ -875,7 +910,7 @@ export default function CostsPanel({ tripId, tripMembers = [] }: CostsPanelProps
         {/* The money, and what to do with it. */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, alignSelf: 'center' }}>
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 4, whiteSpace: 'nowrap' }}>
-            <span className="bg-surface-secondary border border-edge text-content" style={{ display: 'inline-flex', alignItems: 'center', padding: isMobile ? '0' : '6px 13px', borderRadius: 999, border: isMobile ? 0 : undefined, background: isMobile ? 'none' : undefined, fontSize: isMobile ? 'calc(18px * var(--fs-scale-subtitle, 1))' : 'calc(15px * var(--fs-scale-subtitle, 1))', fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>{fmt(baseTotal(e))}</span>
+            <span className={'bg-surface-secondary border border-edge ' + (estimate ? 'text-content-muted' : 'text-content')} style={{ display: 'inline-flex', alignItems: 'center', padding: isMobile ? '0' : '6px 13px', borderRadius: 999, border: isMobile ? 0 : undefined, borderStyle: estimate && !isMobile ? 'dashed' : undefined, background: isMobile ? 'none' : undefined, opacity: estimate ? 0.75 : 1, fontSize: isMobile ? 'calc(18px * var(--fs-scale-subtitle, 1))' : 'calc(15px * var(--fs-scale-subtitle, 1))', fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>{fmt(baseTotal(e))}</span>
             {!unfinished && (e.members || []).length > 0 && Math.abs(net) > 0.01 && (
               <span style={{ display: 'inline-flex', alignItems: 'center', padding: isMobile ? 0 : '2px 9px', borderRadius: 999, background: isMobile ? 'none' : (net > 0 ? 'rgba(22,163,74,0.13)' : 'rgba(220,38,38,0.13)'), fontSize: 'calc(11.5px * var(--fs-scale-caption, 1))', fontWeight: 600, color: net > 0 ? '#16a34a' : '#dc2626' }}>
                 {net > 0 ? t('costs.youLent', { amount: fmt(net) }) : t('costs.youBorrowed', { amount: fmt(-net) })}
@@ -1245,6 +1280,7 @@ export function ExpenseModal({ tripId, base, people, me, editing, prefill, onClo
   const [currency, setCurrency] = useState((editing?.currency || base).toUpperCase())
   const [day, setDay] = useState(editing?.expense_date || localToday())
   const [note, setNote] = useState(() => readUserNote(editing))
+  const [costStatus, setCostStatus] = useState<CostStatus>(editing?.cost_status ?? 'final')
   // Edit and prefill seeds are padded to the currency's decimals (#2175): the DB
   // returns numbers, so a saved 4,90 would otherwise reopen as "4,9" and a saved
   // 5,00 as "5". A prefill has no currency of its own — it is read as `base`,
@@ -1515,6 +1551,7 @@ export function ExpenseModal({ tripId, base, people, me, editing, prefill, onClo
       member_ids: memberIds,
       expense_date: day || null,
       total_price: totalNum,
+      cost_status: costStatus,
       note: note.trim() || null,
       ticket_json: splitMode === 'ticket' ? writeTicketItems(ticketItems) : null,
       ...(!editing && prefill?.reservationId ? { reservation_id: prefill.reservationId } : {}),
@@ -1565,6 +1602,22 @@ export function ExpenseModal({ tripId, base, people, me, editing, prefill, onClo
         <div>
           <label className={labelCls}>{t('costs.whatFor')}</label>
           <input value={name} onChange={e => setName(e.target.value)} placeholder={t('costs.namePlaceholder')} className={inputCls} style={{ borderRadius: 10, padding: '11px 13px', fontSize: 'calc(14px * var(--fs-scale-body, 1))', outline: 'none' }} />
+        </div>
+
+        <div>
+          <label className={labelCls}>{t('costs.status')}</label>
+          <div role="radiogroup" aria-label={t('costs.status')} className="bg-surface-input border border-edge" style={{ display: 'flex', borderRadius: 10, padding: 3, gap: 3 }}>
+            {COST_STATUSES.map(s => (
+              <button type="button" key={s} role="radio" aria-checked={costStatus === s} onClick={() => setCostStatus(s)}
+                className={costStatus === s ? 'bg-surface-card text-content border border-edge' : 'text-content-muted'}
+                style={{ flex: 1, padding: '7px 10px', borderRadius: 8, fontSize: 'calc(13px * var(--fs-scale-body, 1))', fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit', background: costStatus === s ? undefined : 'none', border: costStatus === s ? undefined : 0 }}>
+                {t('costs.status.' + s)}
+              </button>
+            ))}
+          </div>
+          <div className="text-content-faint" style={{ marginTop: 6, fontSize: 'calc(12px * var(--fs-scale-body, 1))' }}>
+            {t(costStatusHintKey(editing, costStatus))}
+          </div>
         </div>
 
         <div>

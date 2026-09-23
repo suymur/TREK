@@ -126,6 +126,7 @@ describe('MCostSheet', () => {
       member_ids: [1, 2],
       expense_date: TODAY,
       total_price: 85.5,
+      cost_status: 'final',
       note: null,
       ticket_json: null,
       // Always sent, empty when nothing was attached: the server treats the
@@ -656,5 +657,46 @@ describe('MCostSheet', () => {
 
     expect(screen.getAllByText('XTS 5.00')).toHaveLength(2)
     expect(screen.getByText('Split 2 ways · XTS 5.00 each')).toBeInTheDocument()
+  })
+})
+
+describe('MCostSheet — estimate / final (fork #3)', () => {
+  beforeEach(() => {
+    resetAllStores()
+    clearExchangeRateCache()
+    addBudgetItem = vi.fn(async () => buildBudgetItem({ id: 9 }))
+    updateBudgetItem = vi.fn(async () => buildBudgetItem({ id: 9 }))
+    deleteBudgetItem = vi.fn(async () => undefined)
+    useTripStore.setState(
+      { addBudgetItem, updateBudgetItem, deleteBudgetItem } as unknown as Partial<TripStoreState>,
+    )
+  })
+
+  it('FE-MOB-COSTSH-EST-001: a new expense can be saved as an estimate', async () => {
+    renderSheet()
+    fillBasics('Hotel', '200')
+    expect(screen.getByRole('radio', { name: 'Final' })).toHaveAttribute('aria-checked', 'true')
+    fireEvent.click(screen.getByRole('radio', { name: 'Estimate' }))
+
+    fireEvent.click(submit())
+    await waitFor(() => expect(addBudgetItem).toHaveBeenCalledTimes(1))
+    expect(addBudgetItem).toHaveBeenCalledWith(1, expect.objectContaining({ cost_status: 'estimate', total_price: 200 }))
+  })
+
+  it('FE-MOB-COSTSH-EST-002: turning a saved estimate final keeps the amount and says so', async () => {
+    const editing = buildBudgetItem({
+      id: 30, name: 'Hotel', category: 'accommodation', total_price: 200, currency: 'EUR', cost_status: 'estimate',
+      payers: [{ user_id: 1, amount: 200 }], members: [member(1, null), member(2, null)],
+    })
+    renderSheet({ editing })
+    expect(screen.getByRole('radio', { name: 'Estimate' })).toHaveAttribute('aria-checked', 'true')
+
+    fireEvent.click(screen.getByRole('radio', { name: 'Final' }))
+    expect(screen.getByText('The estimated amount stays in place. Correct it if the real cost differs.')).toBeInTheDocument()
+    expect(totalField()).toHaveValue('200,00')
+
+    fireEvent.click(saveBtn())
+    await waitFor(() => expect(updateBudgetItem).toHaveBeenCalledTimes(1))
+    expect(updateBudgetItem).toHaveBeenCalledWith(1, 30, expect.objectContaining({ cost_status: 'final', total_price: 200 }))
   })
 })

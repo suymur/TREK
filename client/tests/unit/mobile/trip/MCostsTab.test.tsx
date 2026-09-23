@@ -446,11 +446,11 @@ describe('MCostsTab', () => {
 
     const csv = await blobs[0].text()
     const lines = csv.replace('﻿', '').split('\r\n')
-    expect(lines[0]).toBe('Date;Name;Category;Amount;Currency;Amount (USD);Note')
-    expect(lines[1]).toBe(';Souvenirs;costs.cat.shopping;25.00;USD;25.00;')
-    expect(lines[2]).toBe('04/30/2026;Museum;costs.cat.activities;30.00;GBP;60.00;"Tickets; adult"')
+    expect(lines[0]).toBe('Date;Name;Category;Amount;Currency;Amount (USD);Note;Status')
+    expect(lines[1]).toBe(';Souvenirs;costs.cat.shopping;25.00;USD;25.00;;final')
+    expect(lines[2]).toBe('04/30/2026;Museum;costs.cat.activities;30.00;GBP;60.00;"Tickets; adult";final')
     // The ticket JSON note never leaves the app as a "note".
-    expect(lines[4]).toBe('05/02/2026;Taxi;costs.cat.transport;20.00;USD;20.00;')
+    expect(lines[4]).toBe('05/02/2026;Taxi;costs.cat.transport;20.00;USD;20.00;;final')
   })
 
   it('FE-MOB-COSTT-029: records a manual payment and refreshes the settlement', async () => {
@@ -741,5 +741,45 @@ describe('MCostsTab', () => {
     expect(submit).toBeDisabled()
     fireEvent.click(submit)
     expect(create).not.toHaveBeenCalled()
+  })
+})
+
+describe('MCostsTab — estimate / final (fork #3)', () => {
+  /** A planned hotel I am pencilled in to pay: an estimate, so it stays out of every share. */
+  const HOTEL_ESTIMATE = {
+    id: 15, trip_id: 7, name: 'Hotel', category: 'accommodation', total_price: 300, currency: 'USD',
+    expense_date: '2026-05-01', note: null, cost_status: 'estimate',
+    members: [
+      { user_id: 1, paid: 0, username: 'Me', amount: null, avatar_url: null },
+      { user_id: 2, paid: 0, username: 'Ada', amount: null, avatar_url: null },
+    ],
+    payers: [{ user_id: 1, amount: 300, username: 'Me' }],
+  } as unknown as BudgetItem
+
+  beforeEach(() => {
+    resetAllStores()
+    clearExchangeRateCache()
+    seedStore(useAuthStore, { user: buildUser({ id: 1, username: 'Me' }) })
+    localStorage.setItem('trek_fx_USD', JSON.stringify({ rates: { USD: 1, GBP: 0.5 }, ts: Date.now() }))
+    settlementBases = []
+    serveSettlement()
+  })
+
+  it('FE-MOB-COSTT-EST-001: the hero keeps final spend and adds estimated and planned; the row gets a chip', async () => {
+    await renderTab(planner({ budgetItems: [...ITEMS, HOTEL_ESTIMATE] }))
+    const hero = up(screen.getByText('costs.totalSpend'), 1)
+    // Same final spend and the same my paid / my share as without the estimate.
+    expect(hero.textContent).toContain('$185.00')
+    expect(hero.textContent).toContain('$100.00')
+    const line = screen.getByTestId('cost-status-totals')
+    expect(line.textContent).toContain('costs.totalEstimated · $300.00')
+    expect(line.textContent).toContain('costs.totalPlanned · $485.00')
+    expect(cardOf('Hotel').querySelector('[data-testid="estimate-chip"]')?.textContent).toBe('costs.status.estimateShort')
+    expect(cardOf('Ramen').querySelector('[data-testid="estimate-chip"]')).toBeNull()
+  })
+
+  it('FE-MOB-COSTT-EST-002: without an estimate the hero shows no estimated/planned line', async () => {
+    await renderTab()
+    expect(screen.queryByTestId('cost-status-totals')).toBeNull()
   })
 })
