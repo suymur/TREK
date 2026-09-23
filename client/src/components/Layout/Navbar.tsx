@@ -11,6 +11,7 @@ import type { LucideIcon } from 'lucide-react'
 import InAppNotificationBell from './InAppNotificationBell.tsx'
 import { resolvePluginIcon } from '../shared/PluginIcon'
 import { visibleManagedNavItems } from '../../managed'
+import { costsNavItem } from './navItems'
 
 const ADDON_ICONS: Record<string, LucideIcon> = { CalendarDays, Briefcase, Globe, Compass, Bookmark }
 
@@ -56,6 +57,7 @@ export default function Navbar({ tripTitle, tripId, onBack, showBack, onShare }:
   // Only show 'global' type addons in the navbar — 'integration' addons have no dedicated page
   const globalAddons = allAddons.filter((a: Addon) => a.type === 'global' && a.enabled)
   const pagePlugins = usePluginStore(s => s.plugins).filter(p => p.type === 'page')
+  const costsNav = costsNavItem(allAddons, t)
 
   useEffect(() => {
     if (user) loadAddons()
@@ -154,7 +156,7 @@ export default function Navbar({ tripTitle, tripId, onBack, showBack, onShare }:
           can happen: the pill takes the width it needs and the columns beside
           it give way. min-w-0 lets it shrink past its content and scroll rather
           than push the actions off the bar. */}
-      {(globalAddons.length > 0 || pagePlugins.length > 0) && !tripTitle && (
+      {(globalAddons.length > 0 || pagePlugins.length > 0 || costsNav) && !tripTitle && (
         <div
           className="trek-nav-pill min-w-0"
           style={{
@@ -167,6 +169,7 @@ export default function Navbar({ tripTitle, tripId, onBack, showBack, onShare }:
         >
           {[{ id: '__trips', path: '/dashboard', label: t('nav.myTrips'), Icon: Briefcase },
             ...globalAddons.map(a => ({ id: a.id, path: `/${a.id}`, label: getAddonName(a), Icon: ADDON_ICONS[a.icon] || CalendarDays })),
+            ...(costsNav ? [{ id: costsNav.id, path: costsNav.to, label: costsNav.label, Icon: costsNav.icon }] : []),
             ...pagePlugins.map(p => ({ id: `plugin:${p.id}`, path: `/plugins/${p.id}`, label: p.name, Icon: resolvePluginIcon(p.icon) })),
             // Empty in this repository — see client/src/managed.
             ...visibleManagedNavItems(user?.role === 'admin').map(m => ({ id: `managed:${m.id}`, path: m.path, label: m.label, Icon: m.Icon }))

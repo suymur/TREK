@@ -380,7 +380,7 @@ describe('Navbar styling and menu details', () => {
   it('FE-W5NAV-005: a catalogued addon uses its translated name, an unknown one its own', () => {
     seedStore(useAddonStore, {
       addons: [
-        { id: 'budget', name: 'Budget', icon: 'Briefcase', type: 'global', enabled: true },
+        { id: 'packing', name: 'Packing', icon: 'Briefcase', type: 'global', enabled: true },
         { id: 'trip-doctor', name: 'Trip Doctor', icon: 'NoSuchIcon', type: 'global', enabled: true },
         { id: 'weather', name: 'Weather', icon: 'Globe', type: 'integration', enabled: true },
         { id: 'atlas', name: 'Atlas', icon: 'Globe', type: 'global', enabled: false },
@@ -388,10 +388,25 @@ describe('Navbar styling and menu details', () => {
     });
     render(<Navbar />);
 
-    expect(screen.getByRole('link', { name: /^Costs$/ })).toHaveAttribute('href', '/budget');
+    expect(screen.getByRole('link', { name: /^Lists$/ })).toHaveAttribute('href', '/packing');
     expect(screen.getByRole('link', { name: /^Trip Doctor$/ })).toBeInTheDocument();
     expect(screen.queryByRole('link', { name: /^Weather$/ })).not.toBeInTheDocument();
     expect(screen.queryByRole('link', { name: /^Atlas$/ })).not.toBeInTheDocument();
+  });
+
+  it('FE-W5NAV-005b: the Costs addon adds the cost overview tab, and only while it is on', () => {
+    seedStore(useAddonStore, {
+      addons: [{ id: 'budget', name: 'Budget', icon: 'Wallet', type: 'trip', enabled: true }],
+    });
+    const { unmount } = render(<Navbar />);
+    expect(screen.getByRole('link', { name: /^Costs$/ })).toHaveAttribute('href', '/costs');
+    unmount();
+
+    seedStore(useAddonStore, {
+      addons: [{ id: 'budget', name: 'Budget', icon: 'Wallet', type: 'trip', enabled: false }],
+    });
+    render(<Navbar />);
+    expect(screen.queryByRole('link', { name: /^Costs$/ })).not.toBeInTheDocument();
   });
 
   it('FE-W5NAV-006: the active tab keeps its colour on hover, inactive tabs brighten', () => {

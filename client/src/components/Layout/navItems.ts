@@ -1,5 +1,5 @@
 import { useMemo } from 'react'
-import { LayoutGrid, CalendarDays, Globe, Compass, Bookmark, type LucideIcon } from 'lucide-react'
+import { LayoutGrid, CalendarDays, Globe, Compass, Bookmark, Wallet, type LucideIcon } from 'lucide-react'
 import { useTranslation } from '../../i18n'
 import { useAddonStore } from '../../store/addonStore'
 import { usePluginStore } from '../../store/pluginStore'
@@ -11,8 +11,9 @@ import { resolvePluginIcon } from '../shared/PluginIcon'
  * never drift between them.
  *
  * Stable ids used for persistence: `'dashboard'` (pinned), an enabled global
- * addon's id (vacay|atlas|journey|collections|future), or `'plugin:<id>'` for a
- * page plugin. Dashboard is always first and immovable.
+ * addon's id (vacay|atlas|journey|collections|future), `'costs'` for the
+ * cross-trip cost overview, or `'plugin:<id>'` for a page plugin. Dashboard is
+ * always first and immovable.
  */
 export interface NavItemDef {
   id: string
@@ -48,10 +49,24 @@ export const MOBILE_NAV_MAX_BAR = 2
  */
 export const DEFAULT_DOCK_IDS = ['vacay', 'journey', 'atlas', 'collections']
 
+/**
+ * The cost overview (/costs, #2). Costs is a trip addon, not a global one, so it
+ * has no entry of its own in the addon list; the page exists whenever the Costs
+ * addon is on. The desktop navbar and the mobile dock both read it from here.
+ */
+export function costsNavItem(
+  addons: { id: string; enabled: boolean }[],
+  t: (key: string) => string,
+): NavItemDef | null {
+  if (!addons.some((a) => a.id === 'budget' && a.enabled)) return null
+  return { id: 'costs', to: '/costs', label: t('costsOverview.nav'), icon: Wallet }
+}
+
 export function buildNavItems(
   globalAddons: { id: string; name: string; icon: string }[],
   pagePlugins: { id: string; name: string; icon: string | null }[],
   t: (key: string) => string,
+  costs: NavItemDef | null = null,
 ): NavItemDef[] {
   return [
     { id: 'dashboard', to: '/dashboard', label: t('nav.myTrips'), icon: LayoutGrid, pinned: true },
@@ -65,6 +80,7 @@ export function buildNavItems(
         icon: ADDON_ICONS[a.id] ?? resolvePluginIcon(a.icon),
       }
     }),
+    ...(costs ? [costs] : []),
     ...pagePlugins.map((p) => ({
       id: `plugin:${p.id}`,
       to: `/plugins/${p.id}`,
@@ -85,6 +101,7 @@ export function useNavItems(): NavItemDef[] {
         addons.filter((a) => a.type === 'global' && a.enabled),
         plugins.filter((p) => p.type === 'page'),
         t,
+        costsNavItem(addons, t),
       ),
     [addons, plugins, t],
   )
