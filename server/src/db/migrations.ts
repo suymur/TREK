@@ -5242,6 +5242,31 @@ function runMigrations(db: Database.Database): void {
         db.exec("ALTER TABLE budget_items ADD COLUMN cost_status TEXT NOT NULL DEFAULT 'final' CHECK (cost_status IN ('estimate', 'final'))");
       }
     },
+
+    /*
+     * Partial payments of one expense (fork #6): a deposit now, the remainder
+     * later. Amounts are in the expense's currency; `paid_at` NULL means the
+     * installment is still open. Deleting the expense deletes its
+     * installments. The rule that they add up to no more than total_price
+     * lives in BudgetService, because total_price itself can be derived from
+     * the payers inside the same write. No existing row gets an installment,
+     * so every expense behaves as before. Re-runnable.
+     */
+    () => {
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS budget_item_installments (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          budget_item_id INTEGER NOT NULL REFERENCES budget_items(id) ON DELETE CASCADE,
+          label TEXT NOT NULL DEFAULT '',
+          amount REAL NOT NULL CHECK (amount > 0),
+          due_date TEXT,
+          paid_at TEXT,
+          sort_order INTEGER NOT NULL DEFAULT 0,
+          created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        );
+        CREATE INDEX IF NOT EXISTS idx_budget_item_installments_item ON budget_item_installments(budget_item_id);
+      `);
+    },
   ];
 
   if (currentVersion < migrations.length) {

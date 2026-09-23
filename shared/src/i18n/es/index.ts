@@ -1,18 +1,19 @@
 import admin from './admin';
-import dawarich from './dawarich';
-import docsync from './docsync';
 import airport from './airport';
 import atlas from './atlas';
 import backup from './backup';
 import budget from './budget';
-import costsOverview from './costsOverview';
 import categories from './categories';
 import collab from './collab';
 import collection from './collection';
 import common from './common';
+import costsInstallments from './costsInstallments';
+import costsOverview from './costsOverview';
 import dashboard from './dashboard';
+import dawarich from './dawarich';
 import day from './day';
 import dayplan from './dayplan';
+import docsync from './docsync';
 import files from './files';
 import help from './help';
 import inspector from './inspector';
@@ -40,8 +41,8 @@ import photos from './photos';
 import places from './places';
 import planner from './planner';
 import register from './register';
-import roadtrip from './roadtrip';
 import reservations from './reservations';
+import roadtrip from './roadtrip';
 import settings from './settings';
 import share from './share';
 import shared from './shared';
@@ -77,6 +78,7 @@ const locale = {
   ...reservations,
   ...budget,
   ...costsOverview,
+  ...costsInstallments,
   ...files,
   ...packing,
   ...members,

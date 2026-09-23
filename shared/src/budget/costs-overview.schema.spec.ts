@@ -34,6 +34,8 @@ describe('costsOverviewResponseSchema', () => {
     total: 12.5,
     display_total: 12.5,
     categories: [{ category: 'food', total: 12.5, display_total: 12.5 }],
+    open_total: 0,
+    display_open_total: 0,
   };
 
   it('accepts a well-formed overview', () => {
@@ -42,6 +44,7 @@ describe('costsOverviewResponseSchema', () => {
       trips: [trip],
       total: 12.5,
       categories: [{ category: 'food', total: 12.5 }],
+      open_total: 0,
       unconverted_trip_ids: [],
     });
     expect(parsed.success).toBe(true);
@@ -50,9 +53,17 @@ describe('costsOverviewResponseSchema', () => {
   it('accepts a trip without a display figure', () => {
     const parsed = costsOverviewResponseSchema.safeParse({
       currency: 'USD',
-      trips: [{ ...trip, display_total: null, categories: [{ category: 'food', total: 12.5, display_total: null }] }],
+      trips: [
+        {
+          ...trip,
+          display_total: null,
+          display_open_total: null,
+          categories: [{ category: 'food', total: 12.5, display_total: null }],
+        },
+      ],
       total: 0,
       categories: [],
+      open_total: 0,
       unconverted_trip_ids: [1],
     });
     expect(parsed.success).toBe(true);
@@ -64,6 +75,20 @@ describe('costsOverviewResponseSchema', () => {
       trips: [],
       total: 0,
       categories: [{ category: 'Hotel', total: 1 }],
+      open_total: 0,
+      unconverted_trip_ids: [],
+    });
+    expect(parsed.success).toBe(false);
+  });
+
+  it('requires the open amount on every trip', () => {
+    const { open_total: _open, ...withoutOpen } = trip;
+    const parsed = costsOverviewResponseSchema.safeParse({
+      currency: 'EUR',
+      trips: [withoutOpen],
+      total: 12.5,
+      categories: [],
+      open_total: 0,
       unconverted_trip_ids: [],
     });
     expect(parsed.success).toBe(false);

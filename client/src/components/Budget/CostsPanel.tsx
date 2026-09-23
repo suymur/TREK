@@ -27,6 +27,10 @@ import type { TripMember } from './BudgetPanelMemberChips'
 import GuestBadge from '../shared/GuestBadge'
 import { NumericInput } from '../shared/NumericInput'
 import EmptyState from '../shared/EmptyState'
+import { CostInstallmentsSection } from './CostInstallmentsSection'
+import { DuePaymentsCard } from './DuePaymentsList'
+import { InstallmentsChip } from './InstallmentsChip'
+import { useInstallmentDrafts } from './useInstallmentDrafts'
 
 interface CostsPanelProps {
   tripId: number
@@ -508,6 +512,8 @@ export default function CostsPanel({ tripId, tripMembers = [] }: CostsPanelProps
             {SettleFlows()}
           </div>
 
+          <DuePaymentsCard tripId={tripId} tripCurrency={tripCurrency} canEdit={canEdit} cardCls={cardCls} labelCls={labelCls} padding="22px 24px" />
+
           {/* balances */}
           <div className={cardCls} style={{ borderRadius: 22, padding: '22px 24px' }}>
             <div className={labelCls} style={{ marginBottom: 14 }}>{t('costs.balances')}</div>
@@ -709,6 +715,8 @@ export default function CostsPanel({ tripId, tripMembers = [] }: CostsPanelProps
           {SettleFlows()}
         </div>
 
+        <DuePaymentsCard tripId={tripId} tripCurrency={tripCurrency} canEdit={canEdit} cardCls={cardCls} labelCls={labelCls} padding={16} />
+
         {/* Expenses */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
@@ -839,6 +847,7 @@ export default function CostsPanel({ tripId, tripMembers = [] }: CostsPanelProps
                 {t('costs.status.estimateShort')}
               </span>
             )}
+            <InstallmentsChip item={e} currency={cur} />
             {unfinished && !isMobile && (
               <span title={t('costs.unfinishedHint')} style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '2px 8px 2px 6px', borderRadius: 999, background: 'rgba(217,119,6,0.14)', color: '#d97706', fontSize: 'calc(11px * var(--fs-scale-caption, 1))', fontWeight: 700, flexShrink: 0 }}>
                 <span style={{ width: 14, height: 14, borderRadius: '50%', background: '#d97706', color: '#fff', display: 'grid', placeItems: 'center', fontSize: 'calc(10px * var(--fs-scale-caption, 1))', fontWeight: 800 }}>!</span>
@@ -1400,7 +1409,8 @@ export function ExpenseModal({ tripId, base, people, me, editing, prefill, onClo
   const ticketValid = ticketItems.length > 0 && ticketItems.every(item => item.name.trim().length > 0 && (Number.parseFloat(item.price) || 0) > 0 && item.participants.size > 0)
   const payersOk = !multiPayer || (payerIds.size > 0 && payersBalanced(payerAmounts, payerIds, totalNum))
   // A negative total is a valid entry (a refund, #2176); only zero has nothing to say.
-  const valid = name.trim().length > 0 && payersOk && (
+  const installments = useInstallmentDrafts(editing, totalNum)
+  const valid = !installments.exceeds && name.trim().length > 0 && payersOk && (
     isTicketMode
       ? ticketValid
       : totalNum !== 0 && (participants.size === 0 || splitMode === 'equally' || customBalanced)
@@ -1554,6 +1564,7 @@ export function ExpenseModal({ tripId, base, people, me, editing, prefill, onClo
       cost_status: costStatus,
       note: note.trim() || null,
       ticket_json: splitMode === 'ticket' ? writeTicketItems(ticketItems) : null,
+      ...installments.payload,
       ...(!editing && prefill?.reservationId ? { reservation_id: prefill.reservationId } : {}),
       ...(!editing && prefill?.placeId ? { place_id: prefill.placeId } : {}),
     }
@@ -1671,6 +1682,8 @@ export function ExpenseModal({ tripId, base, people, me, editing, prefill, onClo
             })}
           </div>
         </div>
+
+        <CostInstallmentsSection state={installments} currency={currency} total={totalNum} panelCls={panelCls} labelCls={labelCls} />
 
         </div>
 

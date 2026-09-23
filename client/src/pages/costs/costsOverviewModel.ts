@@ -28,10 +28,17 @@ export interface OverviewTripRow {
   /** The trip total in the trip currency, only when that is not the display currency. */
   original: string | null
   categories: OverviewCategoryLine[]
+  /**
+   * Still to be paid on this trip (installments, #6), in the display currency,
+   * in the trip currency when no rate was available; null when nothing is open.
+   */
+  open: string | null
 }
 
 export interface OverviewTotals {
   amount: string
+  /** Still to be paid across all trips; null when nothing is open. */
+  open: string | null
   categories: { category: CostCategory; amount: string }[]
 }
 
@@ -78,7 +85,15 @@ function tripRow(trip: CostsOverviewTrip, display: string, locale: string): Over
       amount: inDisplay(c.display_total),
       original: inTrip(c.total, c.display_total),
     })),
+    open: openAmount(trip, display, locale),
   }
+}
+
+function openAmount(trip: CostsOverviewTrip, display: string, locale: string): string | null {
+  if (!(trip.open_total > 0)) return null
+  return trip.display_open_total == null
+    ? formatMoney(trip.open_total, trip.currency, locale)
+    : formatMoney(trip.display_open_total, display, locale)
 }
 
 export function buildOverviewView(data: CostsOverviewResponse, locale: string): OverviewView {
@@ -88,6 +103,7 @@ export function buildOverviewView(data: CostsOverviewResponse, locale: string): 
     rows: data.trips.map(t => tripRow(t, display, locale)),
     totals: {
       amount: formatMoney(data.total, display, locale),
+      open: data.open_total > 0 ? formatMoney(data.open_total, display, locale) : null,
       categories: data.categories.map(c => ({ category: c.category, amount: formatMoney(c.total, display, locale) })),
     },
     incomplete: data.unconverted_trip_ids.length > 0,

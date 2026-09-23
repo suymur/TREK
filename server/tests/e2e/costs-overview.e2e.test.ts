@@ -185,10 +185,27 @@ describe('Cost overview e2e (real auth guard + temp SQLite)', () => {
     expect(body.total).toBe(406.5);
   });
 
+  it('shows the open amount of the installments per trip (#6)', async () => {
+    const hotel = Number(addItem(tokyo, 'accommodation', 30000).lastInsertRowid);
+    db.prepare("INSERT INTO budget_item_installments (budget_item_id, label, amount, paid_at) VALUES (?, 'Deposit', 10000, '2026-09-01'), (?, 'Rest', 20000, NULL)").run(hotel, hotel);
+    db.prepare("INSERT INTO settings (user_id, key, value) VALUES (1, 'default_currency', '\"EUR\"')").run();
+    try {
+      const body = costsOverviewResponseSchema.parse((await get(1)).body);
+      const row = body.trips.find(t => t.trip_id === tokyo)!;
+      // 20000 JPY open; 150 JPY per EUR.
+      expect(row.open_total).toBe(20000);
+      expect(row.display_open_total).toBe(133.33);
+      expect(body.trips.find(t => t.trip_id === rome)!.open_total).toBe(0);
+      expect(body.open_total).toBe(133.33);
+    } finally {
+      db.prepare('DELETE FROM budget_items WHERE id = ?').run(hotel);
+    }
+  });
+
   it('answers an empty overview for a user without trips', async () => {
     db.prepare("INSERT INTO users (id, username, email, password_hash, role, password_version) VALUES (4, 'new', 'new@example.test', 'x', 'user', 0)").run();
     const body = costsOverviewResponseSchema.parse((await get(4)).body);
-    expect(body).toEqual({ currency: 'EUR', trips: [], total: 0, categories: [], unconverted_trip_ids: [] });
+    expect(body).toEqual({ currency: 'EUR', trips: [], total: 0, categories: [], open_total: 0, unconverted_trip_ids: [] });
     expect(getRates).not.toHaveBeenCalled();
   });
 });

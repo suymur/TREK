@@ -146,7 +146,7 @@ describe('buildCostsOverview', () => {
     const out = buildCostsOverview([trip(1, null, { is_archived: 1, start_date: null, end_date: null })], [], 'EUR', null);
     expect(out.trips[0]).toEqual({
       trip_id: 1, title: 'Trip 1', start_date: null, end_date: null, currency: 'EUR', is_archived: true,
-      item_count: 0, total: 0, display_total: 0, categories: [],
+      item_count: 0, total: 0, display_total: 0, categories: [], open_total: 0, display_open_total: 0,
     });
     expect(out.categories).toEqual([]);
   });
@@ -154,5 +154,28 @@ describe('buildCostsOverview', () => {
   it('adds negative amounts (refunds) into the category they belong to', () => {
     const out = buildCostsOverview([trip(1, 'EUR')], [item(1, 'food', 20), item(1, 'food', -5)], 'EUR', null);
     expect(out.trips[0]!.categories).toEqual([{ category: 'food', total: 15, display_total: 15 }]);
+  });
+
+  it('adds the open amounts (#6) per trip in the trip currency, converted at the expense rate', () => {
+    const out = buildCostsOverview(
+      [trip(1, 'EUR'), trip(2, 'JPY')],
+      [
+        item(1, 'accommodation', 3000, { open_amount: 2000 }),
+        item(1, 'food', 20, { currency: 'USD', exchange_rate: 1.25, open_amount: 10 }),
+        item(1, 'food', 5),
+        item(2, 'food', 1500, { open_amount: 1500 }),
+      ],
+      'EUR',
+      { EUR: 1, JPY: 150 },
+    );
+    expect(out.trips[0]).toMatchObject({ open_total: 2008, display_open_total: 2008 });
+    expect(out.trips[1]).toMatchObject({ open_total: 1500, display_open_total: 10 });
+    expect(out.open_total).toBe(2018);
+  });
+
+  it('leaves an unconvertible trip out of the global open total', () => {
+    const out = buildCostsOverview([trip(1, 'JPY')], [item(1, 'food', 1500, { open_amount: 1500 })], 'EUR', null);
+    expect(out.trips[0]).toMatchObject({ open_total: 1500, display_open_total: null });
+    expect(out.open_total).toBe(0);
   });
 });

@@ -1260,3 +1260,64 @@ describe('estimate / final cost status (fork #3)', () => {
     expect(row.items_count).toBe(1);
   });
 });
+
+describe('installments (fork #6)', () => {
+  function seedPair() {
+    const { user: alice } = createUser(testDb, { username: 'alice' });
+    const { user: bob } = createUser(testDb, { username: 'bob' });
+    const trip = createTrip(testDb, alice.id, { title: 'Trip' });
+    addTripMember(testDb, trip.id, bob.id);
+    return { alice, bob, trip, members: [{ user_id: alice.id }, { user_id: bob.id }] };
+  }
+
+  it('BUDGET-SVC-DB-INST-001: installments never change the settlement', () => {
+    const { alice, trip, members } = seedPair();
+    const flat = budget.createBudgetItem(trip.id, { name: 'Flat', payers: [{ user_id: alice.id, amount: 1000 }], members });
+    const plain = budget.calculateSettlement(trip.id);
+    expect(plain.flows).toHaveLength(1);
+
+    budget.updateBudgetItem(flat.id, trip.id, { installments: [{ label: 'Deposit', amount: 400, paid_at: '2026-09-01' }, { label: 'Rest', amount: 600 }] });
+    const split = budget.calculateSettlement(trip.id);
+
+    expect(split.balances).toEqual(plain.balances);
+    expect(split.flows).toEqual(plain.flows);
+    expect(split.totals).toEqual(plain.totals);
+    expect(split.finalBudgets).toEqual(plain.finalBudgets);
+  });
+
+  it('BUDGET-SVC-DB-INST-002: installments may add up to the total exactly, in cents', () => {
+    const { trip } = seedPair();
+    const item = budget.createBudgetItem(trip.id, { name: 'Tour', total_price: 0.3,
+      installments: [{ label: 'a', amount: 0.1 }, { label: 'b', amount: 0.2 }] });
+    expect(item.installments).toHaveLength(2);
+    expect(item.open_amount).toBe(0.3);
+  });
+
+  it('BUDGET-SVC-DB-INST-003: an update without installments leaves them alone, [] removes them', () => {
+    const { trip } = seedPair();
+    const item = budget.createBudgetItem(trip.id, { name: 'Tour', total_price: 100, installments: [{ label: 'a', amount: 50, due_date: '2026-10-01' }] });
+    expect(budget.updateBudgetItem(item.id, trip.id, { name: 'Tour 2' })!.installments).toHaveLength(1);
+    const cleared = budget.updateBudgetItem(item.id, trip.id, { installments: [] })!;
+    expect(cleared.installments).toEqual([]);
+    expect(cleared).toMatchObject({ paid_amount: 100, open_amount: 0 });
+  });
+
+  it('BUDGET-SVC-DB-INST-004: setInstallmentPaid is scoped to the trip', () => {
+    const { alice, trip } = seedPair();
+    const otherTrip = createTrip(testDb, alice.id, { title: 'Other' });
+    const item = budget.createBudgetItem(trip.id, { name: 'Tour', total_price: 100, installments: [{ label: 'a', amount: 50 }] });
+    const instId = item.installments![0].id;
+    expect(budget.setInstallmentPaid(item.id, otherTrip.id, instId, '2026-09-23')).toBeNull();
+    expect(budget.setInstallmentPaid(item.id, trip.id, instId, '2026-09-23')!.paid_amount).toBe(50);
+  });
+
+  it('BUDGET-SVC-DB-INST-005: a repeated id in one list is stored as two rows and both count', () => {
+    const { trip } = seedPair();
+    const item = budget.createBudgetItem(trip.id, { name: 'Tour', total_price: 100, installments: [{ label: 'a', amount: 60 }] });
+    const id = item.installments![0].id;
+    expect(() => budget.updateBudgetItem(item.id, trip.id, { installments: [{ id, label: 'a', amount: 60 }, { id, label: 'b', amount: 60 }] }))
+      .toThrow(/more than the expense total/);
+    const ok = budget.updateBudgetItem(item.id, trip.id, { installments: [{ id, label: 'a', amount: 40 }, { id, label: 'b', amount: 60 }] })!;
+    expect(ok.installments!.map(i => i.amount)).toEqual([40, 60]);
+  });
+});

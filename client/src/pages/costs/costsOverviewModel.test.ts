@@ -10,7 +10,7 @@ const data: CostsOverviewResponse = {
   trips: [
     {
       trip_id: 7, title: 'Tokyo', start_date: '2026-10-01', end_date: '2026-10-09', currency: 'JPY', is_archived: false,
-      item_count: 2, total: 15000, display_total: 100,
+      item_count: 2, total: 15000, display_total: 100, open_total: 7500, display_open_total: 50,
       categories: [
         { category: 'food', total: 3000, display_total: 20 },
         { category: 'transport', total: 12000, display_total: 80 },
@@ -18,17 +18,17 @@ const data: CostsOverviewResponse = {
     },
     {
       trip_id: 3, title: 'Rome', start_date: null, end_date: null, currency: 'EUR', is_archived: true,
-      item_count: 1, total: 40, display_total: 40,
+      item_count: 1, total: 40, display_total: 40, open_total: 0, display_open_total: 0,
       categories: [{ category: 'food', total: 40, display_total: 40 }],
     },
     {
       trip_id: 2, title: 'Bangkok', start_date: '2026-01-05', end_date: null, currency: 'THB', is_archived: false,
-      item_count: 1, total: 500, display_total: null,
+      item_count: 1, total: 500, display_total: null, open_total: 100, display_open_total: null,
       categories: [{ category: 'food', total: 500, display_total: null }],
     },
     {
       trip_id: 1, title: 'Empty', start_date: null, end_date: null, currency: 'USD', is_archived: false,
-      item_count: 0, total: 0, display_total: 0, categories: [],
+      item_count: 0, total: 0, display_total: 0, categories: [], open_total: 0, display_open_total: 0,
     },
   ],
   total: 140,
@@ -36,6 +36,7 @@ const data: CostsOverviewResponse = {
     { category: 'food', total: 60 },
     { category: 'transport', total: 80 },
   ],
+  open_total: 50,
   unconverted_trip_ids: [2],
 }
 
@@ -94,5 +95,14 @@ describe('buildOverviewView', () => {
 
   it('shows no second figure for a trip without expenses', () => {
     expect(view.rows[3]).toMatchObject({ amount: eur(0), original: null, categories: [] })
+  })
+
+  it('shows what the installments still leave open (#6), per trip and in total', () => {
+    expect(view.rows[0]!.open).toBe(eur(50))
+    expect(view.rows[1]!.open).toBeNull()
+    // No rate: the open amount stays in the trip currency.
+    expect(view.rows[2]!.open).toBe(formatMoney(100, 'THB', 'en-US'))
+    expect(view.totals.open).toBe(eur(50))
+    expect(buildOverviewView({ ...data, open_total: 0 }, 'en-US').totals.open).toBeNull()
   })
 })

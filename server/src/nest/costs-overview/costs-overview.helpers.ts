@@ -33,6 +33,11 @@ export interface OverviewItemRow {
   total_price: number | null;
   currency: string | null;
   exchange_rate: number | null;
+  /**
+   * Still to be paid on this expense, in its own currency (#6): total minus the
+   * paid installments when it has installments, 0 when it has none.
+   */
+  open_amount?: number | null;
 }
 
 /** Live rates keyed "units of X per 1 display currency", as ExchangeRatesService returns them. */
@@ -121,16 +126,20 @@ export function buildCostsOverview(
 
   const globalCents = new Map<CostCategory, number>();
   let globalTotal = 0;
+  let globalOpen = 0;
   const unconverted: number[] = [];
 
   const rows = trips.map((trip): CostsOverviewTrip => {
     const tripCurrency = tripCurrencyOf(trip);
     const tripItems = itemsByTrip.get(trip.id) ?? [];
     const cents = new Map<CostCategory, number>();
+    let openCents = 0;
     for (const item of tripItems) {
       const key = resolveCostCategory(item.category);
       const c = Math.round(itemToTripAmount(item, tripCurrency, rates) * 100);
       cents.set(key, (cents.get(key) ?? 0) + c);
+      // The open part converts with the same rate as the expense it belongs to.
+      if (item.open_amount) openCents += Math.round(itemToTripAmount({ ...item, total_price: item.open_amount }, tripCurrency, rates) * 100);
     }
     const keys = COST_CATEGORIES.filter((k) => cents.has(k));
     const catCents = keys.map((k) => cents.get(k) ?? 0);
@@ -139,11 +148,14 @@ export function buildCostsOverview(
     // A trip without expenses is 0 in any currency, rate or not.
     const factor = tripItems.length === 0 ? 1 : displayFactor(tripCurrency, display, rates);
     let displayTotal: number | null = null;
+    let displayOpen: number | null = null;
     let displayCats: (number | null)[] = keys.map(() => null);
     if (factor === null) {
       unconverted.push(trip.id);
     } else {
       displayTotal = Math.round(totalCents * factor);
+      displayOpen = Math.round(openCents * factor);
+      globalOpen += displayOpen;
       const allocated = allocateDisplayCents(catCents, factor, displayTotal);
       displayCats = allocated;
       globalTotal += displayTotal;
@@ -164,6 +176,8 @@ export function buildCostsOverview(
         const d = displayCats[i];
         return { category, total: toMoney(catCents[i] ?? 0), display_total: d == null ? null : toMoney(d) };
       }),
+      open_total: toMoney(openCents),
+      display_open_total: displayOpen === null ? null : toMoney(displayOpen),
     };
   });
 
@@ -175,6 +189,7 @@ export function buildCostsOverview(
       category,
       total: toMoney(globalCents.get(category) ?? 0),
     })),
+    open_total: toMoney(globalOpen),
     unconverted_trip_ids: unconverted,
   };
 }

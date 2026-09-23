@@ -107,6 +107,14 @@ export const costsOverviewTripSchema = z.object({
   display_total: z.number().nullable(),
   /** Categories with at least one expense, in COST_CATEGORIES order. */
   categories: z.array(costsOverviewTripCategorySchema),
+  /**
+   * Still to be paid on this trip, in the trip currency: the open amount of
+   * every expense split into installments (#6). Expenses without installments
+   * count as paid, so a trip without installments has 0.
+   */
+  open_total: z.number(),
+  /** `open_total` in the display currency; null when no exchange rate was available. */
+  display_open_total: z.number().nullable(),
 });
 export type CostsOverviewTrip = z.infer<typeof costsOverviewTripSchema>;
 
@@ -124,6 +132,8 @@ export const costsOverviewResponseSchema = z.object({
   /** Sum of every trip `display_total`; trips without a rate are left out. */
   total: z.number(),
   categories: z.array(costsOverviewCategoryTotalSchema),
+  /** Sum of every trip `display_open_total`; trips without a rate are left out. */
+  open_total: z.number(),
   /** Trips whose total could not be converted and is missing from the global figures. */
   unconverted_trip_ids: z.array(idSchema),
 });

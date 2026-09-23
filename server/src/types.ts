@@ -1,5 +1,5 @@
 import { Request } from 'express';
-import type { CostStatus } from '@trek/shared';
+import type { BudgetItemInstallment, CostStatus } from '@trek/shared';
 
 export interface User {
   id: number;
@@ -171,6 +171,10 @@ export interface BudgetItem {
   members?: BudgetItemMember[];
   payers?: BudgetItemPayer[];
   receipts?: BudgetItemReceipt[];
+  /** Partial payments over time (fork #6), with the derived paid / open amounts. */
+  installments?: BudgetItemInstallment[];
+  paid_amount?: number;
+  open_amount?: number;
 }
 
 export interface BudgetItemMember {

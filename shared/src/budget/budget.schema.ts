@@ -132,6 +132,52 @@ export const budgetItemReceiptSchema = z.object({
 export type BudgetItemReceipt = z.infer<typeof budgetItemReceiptSchema>;
 
 /**
+ * One partial payment of an expense (fork #6): a deposit now, the remainder
+ * later. A row of budget_item_installments. `amount` is in the expense's own
+ * currency, `due_date` and `paid_at` are calendar days (YYYY-MM-DD); `paid_at`
+ * null means the installment is still open.
+ *
+ * Installments only record when the money moves. They never change the
+ * settlement (who owes whom), and an estimate may carry planned installments.
+ */
+export const budgetItemInstallmentSchema = z.object({
+  id: z.number(),
+  budget_item_id: z.number(),
+  label: z.string(),
+  amount: z.number(),
+  due_date: z.string().nullable(),
+  paid_at: z.string().nullable(),
+  sort_order: z.number(),
+  created_at: z.string().optional(),
+});
+export type BudgetItemInstallment = z.infer<typeof budgetItemInstallmentSchema>;
+
+/** The longest installment label the server stores. */
+export const INSTALLMENT_LABEL_MAX = 100;
+
+/**
+ * One installment as the create and update item requests send it. The list
+ * replaces the expense's installments as a whole: a row with the `id` of an
+ * existing installment of the same expense keeps that row, a row without one is
+ * new, and an existing row the list leaves out is deleted. The server refuses a
+ * list whose amounts add up to more than the expense's total_price.
+ */
+export const budgetInstallmentInputSchema = z.object({
+  id: z.number().int().positive().optional(),
+  label: z.string().trim().max(INSTALLMENT_LABEL_MAX),
+  amount: z.number().min(0.005),
+  due_date: z.iso.date().nullable().optional(),
+  paid_at: z.iso.date().nullable().optional(),
+});
+export type BudgetInstallmentInput = z.infer<typeof budgetInstallmentInputSchema>;
+
+/** Mark one installment paid (a day) or open again (null). */
+export const budgetSetInstallmentPaidRequestSchema = z.object({
+  paid_at: z.iso.date().nullable(),
+});
+export type BudgetSetInstallmentPaidRequest = z.infer<typeof budgetSetInstallmentPaidRequestSchema>;
+
+/**
  * Budget item entity as returned by the budget list/create/update endpoints
  * (server/src/services/budgetService.ts). Columns of the `budget_items` table
  * plus the embedded `members` (equal-split participants), `payers` and `receipts` arrays.
@@ -163,6 +209,16 @@ export const budgetItemSchema = z.object({
   members: z.array(budgetItemMemberSchema).optional(),
   payers: z.array(budgetItemPayerSchema).optional(),
   receipts: z.array(budgetItemReceiptSchema).optional(),
+  /** Partial payments over time, in due order (fork #6). Empty when the expense is not split into installments. */
+  installments: z.array(budgetItemInstallmentSchema).optional(),
+  /**
+   * What has been paid, in the expense currency: the sum of the paid
+   * installments. An expense without installments counts as paid in full,
+   * as it always has.
+   */
+  paid_amount: z.number().optional(),
+  /** total_price - paid_amount: 0 without installments; with installments, whatever is not paid yet, scheduled or not. */
+  open_amount: z.number().optional(),
 });
 export type BudgetItem = z.infer<typeof budgetItemSchema>;
 
@@ -203,6 +259,8 @@ export const budgetCreateItemRequestSchema = z.object({
   place_id: z.number().optional(),
   // Receipt files to link to this expense
   receipt_file_ids: z.array(z.number()).optional(),
+  // Partial payments (deposit / remainder). Omitted means none.
+  installments: z.array(budgetInstallmentInputSchema).optional(),
 });
 export type BudgetCreateItemRequest = z.infer<typeof budgetCreateItemRequestSchema>;
 
@@ -223,6 +281,8 @@ export const budgetUpdateItemRequestSchema = z.object({
   expense_date: z.string().nullable().optional(),
   cost_status: costStatusSchema.optional(),
   receipt_file_ids: z.array(z.number()).optional(),
+  // Replaces the installments as a whole; omitted leaves them unchanged.
+  installments: z.array(budgetInstallmentInputSchema).optional(),
 });
 export type BudgetUpdateItemRequest = z.infer<typeof budgetUpdateItemRequestSchema>;
 
@@ -320,12 +380,14 @@ export const budgetParticipantFinalSchema = z.object({
     /** Per expense they paid on: what they fronted, negative for a refund they received. Σ = expenses. */
     fronted: z.array(z.object({ item_id: z.number(), cents: z.number().int() })),
     /** Per recorded transfer on their side: positive when received, negative when sent. Σ = reimbursed. */
-    moved: z.array(z.object({
-      settlement_id: z.number(),
-      from_user_id: z.number(),
-      to_user_id: z.number(),
-      cents: z.number().int(),
-    })),
+    moved: z.array(
+      z.object({
+        settlement_id: z.number(),
+        from_user_id: z.number(),
+        to_user_id: z.number(),
+        cents: z.number().int(),
+      }),
+    ),
     /** Per suggested flow on their side: positive when it comes to them, negative when they owe it. Σ = pending. */
     outstanding: z.array(z.object({ from_user_id: z.number(), to_user_id: z.number(), cents: z.number().int() })),
   }),

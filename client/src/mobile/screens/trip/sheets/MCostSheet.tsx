@@ -23,6 +23,8 @@ import type { TripMember } from '../../../../components/Budget/BudgetPanelMember
 import { ReceiptPreviewModal } from '../../../../components/Budget/ReceiptPreviewModal'
 import type { BudgetItem, BudgetItemReceipt } from '../../../../types'
 import { COST_STATUSES, type CostStatus } from '@trek/shared'
+import { useInstallmentDrafts } from '../../../../components/Budget/useInstallmentDrafts'
+import MCostInstallmentsSection from './MCostInstallmentsSection'
 
 export interface MCostSheetProps {
   tripId: number
@@ -176,8 +178,9 @@ export default function MCostSheet({ tripId, base, people, me, editing, prefill,
 
   const ticketValid = ticketItems.length > 0 && ticketItems.every(item => item.name.trim().length > 0 && (Number.parseFloat(item.price) || 0) > 0 && item.participants.size > 0)
   const payersOk = !multiPayer || (payerIds.size > 0 && payersBalanced(payerAmounts, payerIds, totalNum))
+  const installments = useInstallmentDrafts(editing, totalNum)
   // A negative total is a valid entry (a refund, #2176); only zero has nothing to say.
-  const valid = name.trim().length > 0 && payersOk && (
+  const valid = !installments.exceeds && name.trim().length > 0 && payersOk && (
     isTicketMode
       ? ticketValid
       : totalNum !== 0 && (participants.size === 0 || splitMode === 'equally' || customBalanced)
@@ -290,6 +293,7 @@ export default function MCostSheet({ tripId, base, people, me, editing, prefill,
       cost_status: costStatus,
       note: note.trim() || null,
       ticket_json: splitMode === 'ticket' ? writeTicketItems(ticketItems) : null,
+      ...installments.payload,
       ...(!editing && prefill?.reservationId ? { reservation_id: prefill.reservationId } : {}),
       ...(!editing && prefill?.placeId ? { place_id: prefill.placeId } : {}),
     }
@@ -691,6 +695,8 @@ export default function MCostSheet({ tripId, base, people, me, editing, prefill,
           placeholder={t('costs.notePlaceholder')}
           className={FIELD_AREA_CLS}
         />
+
+        <MCostInstallmentsSection state={installments} currency={currency} total={totalNum} />
 
         {/* RECEIPTS */}
         <div className="mb-[6px] mt-4 flex items-center justify-between">

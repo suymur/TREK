@@ -65,6 +65,7 @@ export default function MCostsOverview() {
                 <span className="text-[0.8125rem] font-semibold text-m-muted">{t('costsOverview.allTrips')}</span>
                 <span className="font-geist text-[1.25rem] font-bold tabular-nums text-m-ink">{view.totals.amount}</span>
               </div>
+              {view.totals.open && <p className="text-right text-[0.6875rem] font-semibold text-warning">{t('installments.openAmount', { amount: view.totals.open })}</p>}
               <p className="mt-0.5 text-[0.75rem] text-m-faint">{t('costsOverview.subtitle', { currency: view.currency })}</p>
               {byCategory && view.totals.categories.map(c => (
                 <CategoryLine key={c.category} category={c.category} amount={c.amount} original={null} t={t} />
@@ -131,6 +132,7 @@ function TripCard({ row, byCategory, onOpen, t }: {
         <div className="text-right tabular-nums">
           <div className="text-[0.875rem] font-semibold text-m-ink">{row.amount ?? t('costsOverview.noRate')}</div>
           {row.original && <div className="text-[0.6875rem] text-m-faint">{row.original}</div>}
+          {row.open && <div data-testid="m-overview-open" className="text-[0.6875rem] font-semibold text-warning">{t('installments.openAmount', { amount: row.open })}</div>}
         </div>
         <ChevronRight size={16} strokeWidth={2} className="flex-none text-m-faint" />
       </div>

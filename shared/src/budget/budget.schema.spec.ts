@@ -2,6 +2,9 @@ import {
   budgetCreateItemRequestSchema,
   budgetUpdateItemRequestSchema,
   budgetItemSchema,
+  budgetInstallmentInputSchema,
+  budgetSetInstallmentPaidRequestSchema,
+  INSTALLMENT_LABEL_MAX,
   budgetUpdateMembersRequestSchema,
   budgetToggleMemberPaidRequestSchema,
   budgetReorderItemsRequestSchema,
@@ -85,5 +88,65 @@ describe('cost_status', () => {
         cost_status: 'maybe',
       }).success,
     ).toBe(false);
+  });
+});
+
+describe('installments', () => {
+  it('accepts a deposit and a remainder on create and update', () => {
+    const installments = [
+      { label: 'Deposit', amount: 1000, due_date: '2026-10-01', paid_at: '2026-09-20' },
+      { label: 'Remainder', amount: 2000, due_date: '2026-11-15', paid_at: null },
+    ];
+    expect(budgetCreateItemRequestSchema.safeParse({ name: 'Hotel', total_price: 3000, installments }).success).toBe(
+      true,
+    );
+    expect(budgetUpdateItemRequestSchema.safeParse({ installments: [{ id: 4, label: '', amount: 5 }] }).success).toBe(
+      true,
+    );
+    expect(budgetUpdateItemRequestSchema.safeParse({ installments: [] }).success).toBe(true);
+  });
+
+  it('refuses a zero or negative amount, a bad day and an overlong label', () => {
+    expect(budgetInstallmentInputSchema.safeParse({ label: 'x', amount: 0 }).success).toBe(false);
+    expect(budgetInstallmentInputSchema.safeParse({ label: 'x', amount: 0.001 }).success).toBe(false);
+    expect(budgetInstallmentInputSchema.safeParse({ label: 'x', amount: 0.01 }).success).toBe(true);
+    expect(budgetInstallmentInputSchema.safeParse({ label: 'x', amount: -5 }).success).toBe(false);
+    expect(budgetInstallmentInputSchema.safeParse({ label: 'x', amount: 5, due_date: '01.10.2026' }).success).toBe(
+      false,
+    );
+    expect(
+      budgetInstallmentInputSchema.safeParse({ label: 'x'.repeat(INSTALLMENT_LABEL_MAX + 1), amount: 5 }).success,
+    ).toBe(false);
+  });
+
+  it('marks paid with a day and open again with null', () => {
+    expect(budgetSetInstallmentPaidRequestSchema.safeParse({ paid_at: '2026-09-23' }).success).toBe(true);
+    expect(budgetSetInstallmentPaidRequestSchema.safeParse({ paid_at: null }).success).toBe(true);
+    expect(budgetSetInstallmentPaidRequestSchema.safeParse({}).success).toBe(false);
+    expect(budgetSetInstallmentPaidRequestSchema.safeParse({ paid_at: true }).success).toBe(false);
+  });
+
+  it('carries installments and the paid / open amounts on the item', () => {
+    const parsed = budgetItemSchema.safeParse({
+      id: 1,
+      trip_id: 1,
+      category: 'accommodation',
+      name: 'Hotel',
+      total_price: 3000,
+      installments: [
+        {
+          id: 1,
+          budget_item_id: 1,
+          label: 'Deposit',
+          amount: 1000,
+          due_date: null,
+          paid_at: '2026-09-20',
+          sort_order: 0,
+        },
+      ],
+      paid_amount: 1000,
+      open_amount: 2000,
+    });
+    expect(parsed.success).toBe(true);
   });
 });

@@ -13,6 +13,7 @@ import {
 } from '@nestjs/common';
 import type { User } from '../../types';
 import { BudgetService } from './budget.service';
+import { InstallmentsExceedTotalError } from './budget-installments';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { CurrentUser } from '../auth/current-user.decorator';
 import { RequirePermission, TripAccessGuard } from '../permissions/trip-access.guard';
@@ -28,7 +29,21 @@ import {
   BudgetReorderCategoriesDto,
   BudgetCreateSettlementDto,
   BudgetUpdateSettlementDto,
+  BudgetSetInstallmentPaidDto,
 } from './budget.dto';
+
+/**
+ * Installments that would add up to more than the expense total (fork #6) are
+ * a 400 with the service's message. The write already rolled back.
+ */
+async function refuseOverfullInstallments<T>(write: () => Promise<T> | T): Promise<T> {
+  try {
+    return await write();
+  } catch (err) {
+    if (err instanceof InstallmentsExceedTotalError) throw new HttpException({ error: err.message }, 400);
+    throw err;
+  }
+}
 
 /**
  * /api/trips/:tripId/budget — trip-scoped expense planner.
@@ -149,7 +164,7 @@ export class BudgetController {
     @Body() body: BudgetCreateItemDto,
     @Headers('x-socket-id') socketId?: string,
   ) {
-    const item = await this.budget.create(tripId, body);
+    const item = await refuseOverfullInstallments(() => this.budget.create(tripId, body));
     this.budget.broadcast(tripId, 'budget:created', { item }, socketId);
     return { item };
   }
@@ -189,7 +204,7 @@ export class BudgetController {
     @Body() body: BudgetUpdateItemDto,
     @Headers('x-socket-id') socketId?: string,
   ) {
-    const updated = await this.budget.update(id, tripId, body);
+    const updated = await refuseOverfullInstallments(() => this.budget.update(id, tripId, body));
     if (!updated) {
       throw new HttpException({ error: 'Budget item not found' }, 404);
     }
@@ -219,14 +234,14 @@ export class BudgetController {
 
   @RequirePermission('budget_edit')
   @Put(':id/payers')
-  setPayers(
+  async setPayers(
     @CurrentUser() user: User,
     @Param('tripId') tripId: string,
     @Param('id') id: string,
     @Body() body: BudgetUpdatePayersDto,
     @Headers('x-socket-id') socketId?: string,
   ) {
-    const item = this.budget.setPayers(id, tripId, body.payers);
+    const item = await refuseOverfullInstallments(() => this.budget.setPayers(id, tripId, body.payers));
     if (!item) {
       throw new HttpException({ error: 'Budget item not found' }, 404);
     }
@@ -247,6 +262,25 @@ export class BudgetController {
     const member = this.budget.toggleMemberPaid(id, tripId, userId, body.paid);
     this.budget.broadcast(tripId, 'budget:member-paid-updated', { itemId: Number(id), userId: Number(userId), paid: body.paid ? 1 : 0 }, socketId);
     return { member };
+  }
+
+  /** Mark one installment paid on a day, or open again (paid_at null). Answers the whole item. */
+  @RequirePermission('budget_edit')
+  @Put(':id/installments/:installmentId/paid')
+  setInstallmentPaid(
+    @CurrentUser() user: User,
+    @Param('tripId') tripId: string,
+    @Param('id') id: string,
+    @Param('installmentId') installmentId: string,
+    @Body() body: BudgetSetInstallmentPaidDto,
+    @Headers('x-socket-id') socketId?: string,
+  ) {
+    const item = this.budget.setInstallmentPaid(id, tripId, installmentId, body.paid_at);
+    if (!item) {
+      throw new HttpException({ error: 'Installment not found' }, 404);
+    }
+    this.budget.broadcast(tripId, 'budget:updated', { item }, socketId);
+    return { item };
   }
 
   @RequirePermission('budget_edit')

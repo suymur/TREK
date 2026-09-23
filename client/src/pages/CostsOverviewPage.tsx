@@ -90,6 +90,12 @@ function Amount({ amount, original, t, strong = false }: {
   )
 }
 
+/** "X open": what the installments (#6) still leave to pay, under the total. */
+function OpenAmount({ open, t }: { open: string | null; t: T }): React.ReactElement | null {
+  if (!open) return null
+  return <div data-testid="overview-open" className="text-right text-xs font-medium tabular-nums text-warning">{t('installments.openAmount', { amount: open })}</div>
+}
+
 function OverviewTable({ view, byCategory, onOpen, t }: {
   view: OverviewView
   byCategory: boolean
@@ -114,7 +120,7 @@ function OverviewTable({ view, byCategory, onOpen, t }: {
             <tr>
               <th scope="row" className="px-4 py-3 text-left font-semibold text-content">{t('costsOverview.allTrips')}</th>
               <td />
-              <td className="px-4 py-3"><Amount amount={view.totals.amount} original={null} t={t} strong /></td>
+              <td className="px-4 py-3"><Amount amount={view.totals.amount} original={null} t={t} strong /><OpenAmount open={view.totals.open} t={t} /></td>
             </tr>
             {byCategory && view.totals.categories.map(c => (
               <tr key={c.category}>
@@ -160,7 +166,7 @@ function TripRows({ row, byCategory, onOpen, t }: {
           </div>
         </td>
         <td className="px-4 py-3 text-right tabular-nums text-content-muted">{row.itemCount}</td>
-        <td className="px-4 py-3"><Amount amount={row.amount} original={row.original} t={t} strong /></td>
+        <td className="px-4 py-3"><Amount amount={row.amount} original={row.original} t={t} strong /><OpenAmount open={row.open} t={t} /></td>
       </tr>
       {byCategory && row.categories.map(c => (
         <tr key={c.category} className="cursor-pointer hover:bg-surface-hover" onClick={() => onOpen(row.tripId)}>
