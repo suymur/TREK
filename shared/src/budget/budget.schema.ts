@@ -29,10 +29,11 @@ export const budgetItemMemberSchema = z.object({
 export type BudgetItemMember = z.infer<typeof budgetItemMemberSchema>;
 
 /**
- * The fixed "Costs" expense categories. Unlike the old budget, users cannot
- * create their own categories — every expense maps to one of these keys. The
- * label/icon/colour per key live in the client; the server only stores the key.
- * Pre-rework rows used free-text categories; those are shown as `other`.
+ * The fixed "Costs" expense categories. The label/icon/colour per key live in
+ * the client; the server only stores the key. Users can add their own custom
+ * categories next to these (#4, cost-categories.schema.ts); an expense in one
+ * stores `custom:<id>`. Pre-rework rows used free-text categories; those map
+ * through resolveCostCategory and are shown as `other` when nothing matches.
  */
 export const COST_CATEGORIES = [
   'accommodation',
@@ -320,12 +321,14 @@ export const budgetParticipantFinalSchema = z.object({
     /** Per expense they paid on: what they fronted, negative for a refund they received. Σ = expenses. */
     fronted: z.array(z.object({ item_id: z.number(), cents: z.number().int() })),
     /** Per recorded transfer on their side: positive when received, negative when sent. Σ = reimbursed. */
-    moved: z.array(z.object({
-      settlement_id: z.number(),
-      from_user_id: z.number(),
-      to_user_id: z.number(),
-      cents: z.number().int(),
-    })),
+    moved: z.array(
+      z.object({
+        settlement_id: z.number(),
+        from_user_id: z.number(),
+        to_user_id: z.number(),
+        cents: z.number().int(),
+      }),
+    ),
     /** Per suggested flow on their side: positive when it comes to them, negative when they owe it. Σ = pending. */
     outstanding: z.array(z.object({ from_user_id: z.number(), to_user_id: z.number(), cents: z.number().int() })),
   }),

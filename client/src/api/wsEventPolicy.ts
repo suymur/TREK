@@ -46,6 +46,9 @@ export const HANDLED_OUTSIDE_TRIP_STORE = [
   // no state to apply, which is the point: the totals are summed server-side across
   // members whose items this client may not see.
   'packing:bag-totals',
+  // Custom cost categories (#4) — components/Budget/useCostCategories
+  // (useCostCategorySync): the full instance-wide list, applied to its store.
+  'costs:categories-changed',
   // Collections — pages/collections/useCollections ('collections:' prefix listener)
   'collections:updated',
   'collections:accepted',

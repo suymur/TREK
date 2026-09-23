@@ -124,6 +124,19 @@ const budget: TranslationStrings = {
   'costs.cat.fuel': 'Yakıt',
   'costs.cat.parking': 'Otopark',
   'costs.cat.other': 'Diğer',
+  'costs.customCat.new': 'Yeni kategori',
+  'costs.customCat.edit': 'Kategoriyi düzenle',
+  'costs.customCat.name': 'Ad',
+  'costs.customCat.namePlaceholder': 'ör. Dekorasyon',
+  'costs.customCat.icon': 'Simge',
+  'costs.customCat.color': 'Renk',
+  'costs.customCat.shared': 'Özel kategorileri bu sunucudaki herkes görür ve kullanabilir.',
+  'costs.customCat.delete': 'Kategoriyi sil',
+  'costs.customCat.deleteConfirm': '"{name}" silinsin mi? Harcamaları tüm gezilerde Diğer’e taşınır.',
+  'costs.customCat.deleted': 'Kategori silindi. {count} harcama Diğer’e taşındı.',
+  'costs.customCat.duplicate': 'Bu adda bir kategori zaten var.',
+  'costs.customCat.notAllowed': 'Bu kategoriyi yalnızca oluşturan kişi veya bir yönetici değiştirebilir.',
+  'costs.customCat.offline': 'Kategoriler yalnızca çevrimiçiyken değiştirilebilir.',
   'costs.daysCount': '{count} gün',
   'costs.travelers': '{count} yolcu',
   'costs.liveRate': 'anlık kur',
@@ -165,6 +178,7 @@ const budget: TranslationStrings = {
   'costs.noReceipts': 'Ekli fiş yok',
   'costs.deleteReceipt': 'Fişi kaldır',
   'costs.viewReceipt': 'Fişi görüntüle',
-  'costs.receiptLeftBehind': 'Kaydetme başarısız oldu ve yüklenen {count} fiş hâlâ duruyor. Dosyalar sekmesinden silin.',
+  'costs.receiptLeftBehind':
+    'Kaydetme başarısız oldu ve yüklenen {count} fiş hâlâ duruyor. Dosyalar sekmesinden silin.',
 };
 export default budget;

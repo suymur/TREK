@@ -1,7 +1,8 @@
 import {
   COST_CATEGORIES,
+  customCostCategoryKey,
   resolveCostCategory,
-  type CostCategory,
+  type CostCategoryKey,
   type CostsOverviewResponse,
   type CostsOverviewTrip,
 } from '@trek/shared';
@@ -111,7 +112,12 @@ export function buildCostsOverview(
   items: OverviewItemRow[],
   display: string,
   rates: Rates,
+  customCategoryIds: readonly number[] = [],
 ): CostsOverviewResponse {
+  // Fixed categories first, then the custom ones (#4) in their sort order; an
+  // expense whose custom category is gone lands in `other`.
+  const known = new Set(customCategoryIds);
+  const order: CostCategoryKey[] = [...COST_CATEGORIES, ...customCategoryIds.map(customCostCategoryKey)];
   const itemsByTrip = new Map<number, OverviewItemRow[]>();
   for (const item of items) {
     const list = itemsByTrip.get(item.trip_id);
@@ -119,20 +125,20 @@ export function buildCostsOverview(
     else itemsByTrip.set(item.trip_id, [item]);
   }
 
-  const globalCents = new Map<CostCategory, number>();
+  const globalCents = new Map<CostCategoryKey, number>();
   let globalTotal = 0;
   const unconverted: number[] = [];
 
   const rows = trips.map((trip): CostsOverviewTrip => {
     const tripCurrency = tripCurrencyOf(trip);
     const tripItems = itemsByTrip.get(trip.id) ?? [];
-    const cents = new Map<CostCategory, number>();
+    const cents = new Map<CostCategoryKey, number>();
     for (const item of tripItems) {
-      const key = resolveCostCategory(item.category);
+      const key = resolveCostCategory(item.category, known);
       const c = Math.round(itemToTripAmount(item, tripCurrency, rates) * 100);
       cents.set(key, (cents.get(key) ?? 0) + c);
     }
-    const keys = COST_CATEGORIES.filter((k) => cents.has(k));
+    const keys = order.filter((k) => cents.has(k));
     const catCents = keys.map((k) => cents.get(k) ?? 0);
     const totalCents = catCents.reduce((a, c) => a + c, 0);
 
@@ -171,7 +177,7 @@ export function buildCostsOverview(
     currency: display,
     trips: rows,
     total: toMoney(globalTotal),
-    categories: COST_CATEGORIES.filter((k) => globalCents.has(k)).map((category) => ({
+    categories: order.filter((k) => globalCents.has(k)).map((category) => ({
       category,
       total: toMoney(globalCents.get(category) ?? 0),
     })),

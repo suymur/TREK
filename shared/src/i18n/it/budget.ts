@@ -124,6 +124,19 @@ const budget: TranslationStrings = {
   'costs.cat.fuel': 'Carburante',
   'costs.cat.parking': 'Parcheggio',
   'costs.cat.other': 'Altro',
+  'costs.customCat.new': 'Nuova categoria',
+  'costs.customCat.edit': 'Modifica categoria',
+  'costs.customCat.name': 'Nome',
+  'costs.customCat.namePlaceholder': 'es. Decorazioni',
+  'costs.customCat.icon': 'Icona',
+  'costs.customCat.color': 'Colore',
+  'costs.customCat.shared': 'Tutti su questo server vedono le categorie personalizzate e possono usarle.',
+  'costs.customCat.delete': 'Elimina categoria',
+  'costs.customCat.deleteConfirm': 'Eliminare «{name}»? Le sue spese passano in Altro, in tutti i viaggi.',
+  'costs.customCat.deleted': 'Categoria eliminata. {count} spese sono passate in Altro.',
+  'costs.customCat.duplicate': 'Esiste già una categoria con questo nome.',
+  'costs.customCat.notAllowed': 'Solo chi l’ha creata o un amministratore può modificare questa categoria.',
+  'costs.customCat.offline': 'Le categorie si possono modificare solo online.',
   'costs.daysCount': '{count} giorni',
   'costs.travelers': '{count} viaggiatori',
   'costs.liveRate': 'tasso in tempo reale',
@@ -165,6 +178,7 @@ const budget: TranslationStrings = {
   'costs.noReceipts': 'Nessuna ricevuta allegata',
   'costs.deleteReceipt': 'Rimuovi ricevuta',
   'costs.viewReceipt': 'Visualizza ricevuta',
-  'costs.receiptLeftBehind': 'Salvataggio non riuscito e {count} ricevute caricate sono ancora lì. Rimuovile nella scheda File.',
+  'costs.receiptLeftBehind':
+    'Salvataggio non riuscito e {count} ricevute caricate sono ancora lì. Rimuovile nella scheda File.',
 };
 export default budget;

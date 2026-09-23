@@ -1,10 +1,11 @@
 import { useNavigate } from 'react-router'
 import { ArrowLeft, ChevronRight } from 'lucide-react'
-import type { CostCategory } from '@trek/shared'
+import type { CostCategoryKey } from '@trek/shared'
 import { useTranslation } from '../../../i18n'
 import { useCostsOverview } from '../../../pages/costs/useCostsOverview'
 import type { OverviewTripRow } from '../../../pages/costs/costsOverviewModel'
-import { COST_CAT_META } from '../../../components/Budget/costsCategories'
+import { categoryLabel } from '../../../components/Budget/costsCategories'
+import { useCostCategoryIndex } from '../../../components/Budget/useCostCategories'
 import MGlassBar from '../../components/MGlassBar'
 import MIconBtn from '../../components/MIconBtn'
 import MToggle from '../../components/MToggle'
@@ -88,16 +89,16 @@ export default function MCostsOverview() {
 }
 
 function CategoryLine({ category, amount, original, t }: {
-  category: CostCategory
+  category: CostCategoryKey
   amount: string | null
   original: string | null
   t: T
 }) {
-  const meta = COST_CAT_META[category]
+  const meta = useCostCategoryIndex().meta(category)
   return (
     <div className="mt-2 flex items-center gap-2 text-[0.8125rem]">
       <meta.Icon size={14} strokeWidth={2} className="flex-none" style={{ color: meta.color }} />
-      <span className="min-w-0 flex-1 truncate text-m-muted">{t(meta.labelKey)}</span>
+      <span className="min-w-0 flex-1 truncate text-m-muted">{categoryLabel(meta, t)}</span>
       <span className="text-right tabular-nums text-m-ink">
         {amount ?? t('costsOverview.noRate')}
         {original && <span className="block text-[0.6875rem] text-m-faint">{original}</span>}

@@ -15,7 +15,8 @@ import { budgetApi } from '../../../../api/client'
 import MCostSheet from '../sheets/MCostSheet'
 import { ReceiptPreviewModal } from '../../../../components/Budget/ReceiptPreviewModal'
 import { costStatusTotals, finalBudgetFor, finalBudgetSources, isEstimate, readUserNote, settlementDate } from '../../../../components/Budget/CostsPanel.helpers'
-import { catMeta, COST_CAT_META } from '../../../../components/Budget/costsCategories'
+import { categoryLabel, FIXED_COST_CATEGORY_INDEX } from '../../../../components/Budget/costsCategories'
+import { useCostCategoryIndex, useCostCategorySync } from '../../../../components/Budget/useCostCategories'
 import CustomSelect from '../../../../components/shared/CustomSelect'
 import { CustomDatePicker } from '../../../../components/shared/CustomDateTimePicker'
 import { SYMBOLS, currenciesWith } from '../../../../components/Budget/BudgetPanel.constants'
@@ -56,7 +57,9 @@ export default function MCostsTab({ planner, shell }: MTabScreenProps) {
   const base = (displayCurrency || trip?.currency || 'EUR').toUpperCase()
   const tripCurrency = (trip?.currency || base).toUpperCase()
   const { convert } = useExchangeRates(base)
-  const ctx: CostsCtx = useMemo(() => ({ me, tripCurrency, convert }), [me, tripCurrency, convert])
+  useCostCategorySync()
+  const cats = useCostCategoryIndex()
+  const ctx: CostsCtx = useMemo(() => ({ me, tripCurrency, convert, cats }), [me, tripCurrency, convert, cats])
 
   const [settlement, setSettlement] = useState<CostsSettlementResponse | null>(null)
   // A failed settlement read leaves `settlement` null, and the final budget would
@@ -107,7 +110,7 @@ export default function MCostsTab({ planner, shell }: MTabScreenProps) {
   )
   const groups = useMemo(() => groupLedgerByDay(filtered, filteredSettlements), [filtered, filteredSettlements])
   const catBreakdown = useMemo(() => categoryBreakdown(budgetItems, ctx), [budgetItems, ctx])
-  const catKeys = useMemo(() => categoryFilterKeys(budgetItems), [budgetItems])
+  const catKeys = useMemo(() => categoryFilterKeys(budgetItems, ctx), [budgetItems, ctx])
   const dayKeys = useMemo(() => dayFilterKeys(budgetItems), [budgetItems])
 
   const personName = (id: number) => (id === me ? t('costs.you') : tripMembers.find(p => p.id === id)?.username || '?')
@@ -358,12 +361,12 @@ export default function MCostsTab({ planner, shell }: MTabScreenProps) {
           <p className="mt-2 font-geist text-[0.71875rem] text-m-faint">{t('costs.noCategories')}</p>
         ) : (
           catBreakdown.map(c => {
-            const meta = COST_CAT_META[c.key]
+            const meta = cats.meta(c.key)
             return (
               <div key={c.key} className="pb-[2px] pt-[6px]">
                 <div className="flex items-center gap-[7px]">
                   <span className="h-2 w-2 flex-none rounded-full" style={{ background: meta.color }} />
-                  <span className="min-w-0 flex-1 truncate font-geist text-[0.65625rem] font-semibold text-m-muted">{t(meta.labelKey)}</span>
+                  <span className="min-w-0 flex-1 truncate font-geist text-[0.65625rem] font-semibold text-m-muted">{categoryLabel(meta, t)}</span>
                   <span className="ml-auto flex-none font-geist text-[0.65625rem] font-bold tabular-nums text-m-ink">{formatMoney(c.amount, base, locale)}</span>
                 </div>
                 <div className="mt-1 h-1 overflow-hidden rounded-full bg-[color:var(--m-ic)]">
@@ -410,7 +413,7 @@ export default function MCostsTab({ planner, shell }: MTabScreenProps) {
           className="flex flex-1 items-center justify-between gap-2 overflow-hidden rounded-xl border border-[color:var(--m-rowbr)] bg-m-card px-[13px] py-[9px] text-left"
         >
           <span className="min-w-0 flex-1 truncate text-[0.75rem] font-semibold text-m-ink">
-            {catFilter ? t(catMeta(catFilter).labelKey) : t('costs.filter.allCategories')}
+            {catFilter ? cats.label(catFilter, t) : t('costs.filter.allCategories')}
           </span>
           <ChevronDown size={13} strokeWidth={2} className="flex-none text-m-faint" />
         </button>
@@ -444,7 +447,7 @@ export default function MCostsTab({ planner, shell }: MTabScreenProps) {
             <span className="text-[0.78125rem] font-medium text-m-ink">{t('costs.filter.allCategories')}</span>
           </button>
           {catKeys.map(k => {
-            const meta = COST_CAT_META[k]
+            const meta = cats.meta(k)
             const Icon = meta.Icon
             return (
               <button
@@ -457,7 +460,7 @@ export default function MCostsTab({ planner, shell }: MTabScreenProps) {
                 className="flex w-full items-center gap-[10px] border-b border-[color:var(--m-rowbr)] px-[13px] py-[10px] text-left last:border-b-0"
               >
                 <Icon size={14} strokeWidth={2} style={{ color: meta.color }} className="flex-none" />
-                <span className="text-[0.78125rem] font-medium text-m-ink">{t(meta.labelKey)}</span>
+                <span className="text-[0.78125rem] font-medium text-m-ink">{categoryLabel(meta, t)}</span>
               </button>
             )
           })}
@@ -626,7 +629,7 @@ function ExpenseRow({ item, ctx, base, locale, t, canEdit, onEdit, onDelete, onT
   onTogglePaid: (userId: number, paid: boolean) => void
   onPreviewReceipts: (receipts: BudgetItemReceipt[]) => void
 }) {
-  const meta = catMeta(item.category)
+  const meta = (ctx.cats ?? FIXED_COST_CATEGORY_INDEX).meta(item.category)
   const Icon = meta.Icon
   const cur = currencyOf(item, ctx)
   const total = baseTotal(item, ctx)
@@ -647,7 +650,7 @@ function ExpenseRow({ item, ctx, base, locale, t, canEdit, onEdit, onDelete, onT
           style={{ background: meta.color }}
         >
           <Icon size={10} strokeWidth={2.4} />
-          {t(meta.labelKey)}
+          {categoryLabel(meta, t)}
         </span>
         {unfinished && (
           <span

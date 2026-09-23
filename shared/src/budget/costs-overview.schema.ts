@@ -1,5 +1,11 @@
 import { idSchema } from '../common/primitives.schema';
 import { COST_CATEGORIES, type CostCategory } from './budget.schema';
+import {
+  customCostCategoryKey,
+  parseCustomCostCategoryId,
+  type CostCategoryKey,
+  type CustomCostCategoryKey,
+} from './cost-categories.schema';
 
 import { z } from 'zod';
 
@@ -75,14 +81,32 @@ const COST_CATEGORY_SET: ReadonlySet<string> = new Set(COST_CATEGORIES);
  * The one place a stored `budget_items.category` becomes a category key. The
  * Costs tab and the cross-trip overview both group by it, so an expense lands in
  * the same bucket on both screens. Unknown and empty values are `other`.
+ *
+ * A `custom:<id>` key (#4) stays itself when `customIds` knows the id. Pass the
+ * ids of the custom categories that exist: a key whose category was deleted, or
+ * never existed, is `other` like any other unknown value. Without `customIds`
+ * every well-formed custom key is kept.
  */
-export function resolveCostCategory(category: string | null | undefined): CostCategory {
+export function resolveCostCategory(
+  category: string | null | undefined,
+  customIds?: ReadonlySet<number>,
+): CostCategoryKey {
   if (!category) return 'other';
   if (COST_CATEGORY_SET.has(category)) return category as CostCategory;
+  const customId = parseCustomCostCategoryId(category);
+  if (customId !== null) return !customIds || customIds.has(customId) ? customCostCategoryKey(customId) : 'other';
   return LEGACY_CATEGORY_MAP[category.trim().toLowerCase()] ?? 'other';
 }
 
-const costCategorySchema = z.enum(COST_CATEGORIES);
+const customCostCategoryKeySchema = z
+  .string()
+  .refine((v) => parseCustomCostCategoryId(v) !== null, { message: 'must be custom:<id>' })
+  .transform((v) => v as CustomCostCategoryKey);
+
+/** A fixed category key or `custom:<id>` (#4). */
+export const costCategoryKeySchema = z.union([z.enum(COST_CATEGORIES), customCostCategoryKeySchema]);
+
+const costCategorySchema = costCategoryKeySchema;
 
 /** One category of one trip: the amount in the trip currency and in the display currency. */
 export const costsOverviewTripCategorySchema = z.object({
@@ -105,7 +129,7 @@ export const costsOverviewTripSchema = z.object({
   total: z.number(),
   /** `total` in the display currency; null when no exchange rate was available. */
   display_total: z.number().nullable(),
-  /** Categories with at least one expense, in COST_CATEGORIES order. */
+  /** Categories with at least one expense: COST_CATEGORIES order, then custom categories in their sort order. */
   categories: z.array(costsOverviewTripCategorySchema),
 });
 export type CostsOverviewTrip = z.infer<typeof costsOverviewTripSchema>;

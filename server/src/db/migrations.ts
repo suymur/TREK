@@ -5242,6 +5242,30 @@ function runMigrations(db: Database.Database): void {
         db.exec("ALTER TABLE budget_items ADD COLUMN cost_status TEXT NOT NULL DEFAULT 'final' CHECK (cost_status IN ('estimate', 'final'))");
       }
     },
+
+    /*
+     * Custom cost categories (#4). Instance-wide: every user sees the same list.
+     * An expense in one stores `custom:<id>` in budget_items.category, which is
+     * free text already, so budget_items needs no change. AUTOINCREMENT keeps a
+     * deleted id from ever being handed out again, so a stale `custom:<id>` in
+     * an offline cache cannot turn into a different category. The unique index
+     * refuses a second category of the same name in any letter case.
+     * IF NOT EXISTS makes the step re-runnable.
+     */
+    () => {
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS cost_categories (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          name TEXT NOT NULL,
+          icon TEXT NOT NULL,
+          color TEXT NOT NULL,
+          created_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+          created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+          sort_order INTEGER NOT NULL DEFAULT 0
+        );
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_cost_categories_name ON cost_categories(name COLLATE NOCASE);
+      `);
+    },
   ];
 
   if (currentVersion < migrations.length) {

@@ -124,6 +124,19 @@ const budget: TranslationStrings = {
   'costs.cat.fuel': 'Carburant',
   'costs.cat.parking': 'Parking',
   'costs.cat.other': 'Autre',
+  'costs.customCat.new': 'Nouvelle catégorie',
+  'costs.customCat.edit': 'Modifier la catégorie',
+  'costs.customCat.name': 'Nom',
+  'costs.customCat.namePlaceholder': 'p. ex. Décoration',
+  'costs.customCat.icon': 'Icône',
+  'costs.customCat.color': 'Couleur',
+  'costs.customCat.shared': 'Tout le monde sur ce serveur voit les catégories personnalisées et peut les utiliser.',
+  'costs.customCat.delete': 'Supprimer la catégorie',
+  'costs.customCat.deleteConfirm': 'Supprimer « {name} » ? Ses dépenses passent dans Autre, sur tous les voyages.',
+  'costs.customCat.deleted': 'Catégorie supprimée. {count} dépenses sont passées dans Autre.',
+  'costs.customCat.duplicate': 'Une catégorie porte déjà ce nom.',
+  'costs.customCat.notAllowed': 'Seul le créateur ou un administrateur peut modifier cette catégorie.',
+  'costs.customCat.offline': 'Les catégories ne peuvent être modifiées qu’en ligne.',
   'costs.daysCount': '{count} jours',
   'costs.travelers': '{count} voyageurs',
   'costs.liveRate': 'taux en direct',
@@ -165,6 +178,7 @@ const budget: TranslationStrings = {
   'costs.noReceipts': 'Aucun reçu joint',
   'costs.deleteReceipt': 'Supprimer le reçu',
   'costs.viewReceipt': 'Voir le reçu',
-  'costs.receiptLeftBehind': 'Échec de la sauvegarde, {count} reçus téléversés sont toujours là. Supprimez-les dans les Fichiers.',
+  'costs.receiptLeftBehind':
+    'Échec de la sauvegarde, {count} reçus téléversés sont toujours là. Supprimez-les dans les Fichiers.',
 };
 export default budget;

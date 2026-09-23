@@ -124,6 +124,19 @@ const budget: TranslationStrings = {
   'costs.cat.fuel': 'Paliwo',
   'costs.cat.parking': 'Parking',
   'costs.cat.other': 'Inne',
+  'costs.customCat.new': 'Nowa kategoria',
+  'costs.customCat.edit': 'Edytuj kategorię',
+  'costs.customCat.name': 'Nazwa',
+  'costs.customCat.namePlaceholder': 'np. Dekoracje',
+  'costs.customCat.icon': 'Ikona',
+  'costs.customCat.color': 'Kolor',
+  'costs.customCat.shared': 'Własne kategorie widzi i może używać każdy na tym serwerze.',
+  'costs.customCat.delete': 'Usuń kategorię',
+  'costs.customCat.deleteConfirm': 'Usunąć „{name}”? Jej wydatki trafią do kategorii Inne we wszystkich podróżach.',
+  'costs.customCat.deleted': 'Kategoria usunięta. Wydatki przeniesione do Inne: {count}.',
+  'costs.customCat.duplicate': 'Kategoria o tej nazwie już istnieje.',
+  'costs.customCat.notAllowed': 'Tę kategorię może zmienić tylko jej twórca lub administrator.',
+  'costs.customCat.offline': 'Kategorie można zmieniać tylko online.',
   'costs.daysCount': 'Dni: {count}',
   'costs.travelers': 'Podróżnych: {count}',
   'costs.liveRate': 'kurs na żywo',
@@ -165,6 +178,7 @@ const budget: TranslationStrings = {
   'costs.noReceipts': 'Brak załączonych paragonów',
   'costs.deleteReceipt': 'Usuń paragon',
   'costs.viewReceipt': 'Zobacz paragon',
-  'costs.receiptLeftBehind': 'Zapis nie powiódł się, a {count} przesłanych paragonów wciąż tam jest. Usuń je w zakładce Pliki.',
+  'costs.receiptLeftBehind':
+    'Zapis nie powiódł się, a {count} przesłanych paragonów wciąż tam jest. Usuń je w zakładce Pliki.',
 };
 export default budget;

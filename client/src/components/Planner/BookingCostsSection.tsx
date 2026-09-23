@@ -3,7 +3,8 @@ import { useTripStore } from '../../store/tripStore'
 import { useSettingsStore } from '../../store/settingsStore'
 import { useTranslation } from '../../i18n'
 import { formatMoney } from '../../utils/formatters'
-import { catMeta } from '../Budget/costsCategories'
+import { categoryLabel } from '../Budget/costsCategories'
+import { useCostCategoryIndex } from '../Budget/useCostCategories'
 import type { BudgetItem } from '../../types'
 
 /**
@@ -30,6 +31,7 @@ export function BookingCostsSection({ reservationId, placeId = null, hintKey = '
 }) {
   const { t, locale } = useTranslation()
   const budgetItems = useTripStore(s => s.budgetItems)
+  const cats = useCostCategoryIndex()
   const trip = useTripStore(s => s.trip)
   const displayCurrency = useSettingsStore(s => s.settings.default_currency)
   const base = (displayCurrency || trip?.currency || 'EUR').toUpperCase()
@@ -43,7 +45,7 @@ export function BookingCostsSection({ reservationId, placeId = null, hintKey = '
 
   // Import review (booking not saved yet): preview the parsed cost that will be linked on save.
   if (!linked && pendingExpense && pendingExpense.total_price > 0) {
-    const meta = catMeta(pendingExpense.category)
+    const meta = cats.meta(pendingExpense.category)
     const Icon = meta.Icon
     return (
       <div>
@@ -51,7 +53,7 @@ export function BookingCostsSection({ reservationId, placeId = null, hintKey = '
         <div className="bg-surface-secondary border border-edge" style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px', borderRadius: 10 }}>
           <span style={{ width: 26, height: 26, borderRadius: 7, display: 'grid', placeItems: 'center', background: meta.color + '22', color: meta.color, flexShrink: 0 }}><Icon size={14} /></span>
           <div style={{ flex: 1, minWidth: 0 }}>
-            <div className="text-content" style={{ fontSize: 'calc(14px * var(--fs-scale-body, 1))', fontWeight: 600 }}>{t(meta.labelKey)}</div>
+            <div className="text-content" style={{ fontSize: 'calc(14px * var(--fs-scale-body, 1))', fontWeight: 600 }}>{categoryLabel(meta, t)}</div>
             <div className="text-content-faint" style={{ fontSize: 'calc(12px * var(--fs-scale-body, 1))' }}>{t(hintKey)}</div>
           </div>
           <span className="text-content" style={{ fontSize: 'calc(14px * var(--fs-scale-body, 1))', fontWeight: 700, flexShrink: 0 }}>{formatMoney(pendingExpense.total_price, pendingExpense.currency || base, locale)}</span>
@@ -61,7 +63,7 @@ export function BookingCostsSection({ reservationId, placeId = null, hintKey = '
   }
 
   if (linked) {
-    const meta = catMeta(linked.category)
+    const meta = cats.meta(linked.category)
     const Icon = meta.Icon
     return (
       <div>
@@ -70,7 +72,7 @@ export function BookingCostsSection({ reservationId, placeId = null, hintKey = '
           <span style={{ width: 26, height: 26, borderRadius: 7, display: 'grid', placeItems: 'center', background: meta.color + '22', color: meta.color, flexShrink: 0 }}><Icon size={14} /></span>
           <div style={{ flex: 1, minWidth: 0 }}>
             <div className="text-content" style={{ fontSize: 'calc(14px * var(--fs-scale-body, 1))', fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{linked.name}</div>
-            <div className="text-content-faint" style={{ fontSize: 'calc(12px * var(--fs-scale-body, 1))' }}>{t(meta.labelKey)}</div>
+            <div className="text-content-faint" style={{ fontSize: 'calc(12px * var(--fs-scale-body, 1))' }}>{categoryLabel(meta, t)}</div>
           </div>
           <span className="text-content" style={{ fontSize: 'calc(14px * var(--fs-scale-body, 1))', fontWeight: 700, flexShrink: 0 }}>{formatMoney(linked.total_price, linked.currency || base, locale)}</span>
           <button type="button" onClick={() => onEdit(linked)} title={t('common.edit')} className="text-content-muted border border-edge bg-surface-card" style={{ display: 'inline-flex', padding: 7, borderRadius: 8, cursor: 'pointer' }}><Pencil size={13} /></button>

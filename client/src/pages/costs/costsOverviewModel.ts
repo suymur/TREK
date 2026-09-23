@@ -1,4 +1,4 @@
-import type { CostCategory, CostsOverviewResponse, CostsOverviewTrip } from '@trek/shared'
+import type { CostCategoryKey, CostsOverviewResponse, CostsOverviewTrip } from '@trek/shared'
 import { formatMoney } from '../../utils/formatters'
 import { tripStartPath } from '../../utils/startDestination'
 
@@ -10,7 +10,7 @@ import { tripStartPath } from '../../utils/startDestination'
 export type CostsOverviewStatus = 'loading' | 'ready' | 'offline' | 'error'
 
 export interface OverviewCategoryLine {
-  category: CostCategory
+  category: CostCategoryKey
   /** In the display currency, or null when the trip had no exchange rate. */
   amount: string | null
   /** In the trip currency, only when that is not the display currency. */
@@ -32,7 +32,7 @@ export interface OverviewTripRow {
 
 export interface OverviewTotals {
   amount: string
-  categories: { category: CostCategory; amount: string }[]
+  categories: { category: CostCategoryKey; amount: string }[]
 }
 
 export interface OverviewView {

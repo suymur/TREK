@@ -127,6 +127,19 @@ const budget: TranslationStrings = {
   'costs.cat.fuel': 'Kraftstoff',
   'costs.cat.parking': 'Parken',
   'costs.cat.other': 'Sonstiges',
+  'costs.customCat.new': 'Neue Kategorie',
+  'costs.customCat.edit': 'Kategorie bearbeiten',
+  'costs.customCat.name': 'Name',
+  'costs.customCat.namePlaceholder': 'z. B. Deko',
+  'costs.customCat.icon': 'Symbol',
+  'costs.customCat.color': 'Farbe',
+  'costs.customCat.shared': 'Eigene Kategorien sieht und nutzt jeder auf diesem Server.',
+  'costs.customCat.delete': 'Kategorie löschen',
+  'costs.customCat.deleteConfirm': '„{name}“ löschen? Die Ausgaben darin wandern in allen Reisen zu Sonstiges.',
+  'costs.customCat.deleted': 'Kategorie gelöscht. {count} Ausgaben sind jetzt unter Sonstiges.',
+  'costs.customCat.duplicate': 'Eine Kategorie mit diesem Namen gibt es schon.',
+  'costs.customCat.notAllowed': 'Nur wer die Kategorie angelegt hat oder ein Admin kann sie ändern.',
+  'costs.customCat.offline': 'Kategorien lassen sich nur online ändern.',
   'costs.daysCount': '{count} Tage',
   'costs.travelers': '{count} Reisende',
   'costs.liveRate': 'Live-Kurs',
@@ -165,6 +178,7 @@ const budget: TranslationStrings = {
   'costs.noReceipts': 'Keine Belege angehängt',
   'costs.deleteReceipt': 'Beleg entfernen',
   'costs.viewReceipt': 'Beleg ansehen',
-  'costs.receiptLeftBehind': 'Speichern fehlgeschlagen, {count} hochgeladene Belege liegen noch da. Im Dateien-Tab entfernen.',
+  'costs.receiptLeftBehind':
+    'Speichern fehlgeschlagen, {count} hochgeladene Belege liegen noch da. Im Dateien-Tab entfernen.',
 };
 export default budget;
