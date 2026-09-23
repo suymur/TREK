@@ -13,7 +13,7 @@ import {
 } from '@nestjs/common';
 import type { User } from '../../types';
 import { BudgetService } from './budget.service';
-import { InstallmentsExceedTotalError } from './budget-installments';
+import { InstallmentAllocationError, InstallmentsExceedTotalError } from './budget-installments';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { CurrentUser } from '../auth/current-user.decorator';
 import { RequirePermission, TripAccessGuard } from '../permissions/trip-access.guard';
@@ -40,7 +40,7 @@ async function refuseOverfullInstallments<T>(write: () => Promise<T> | T): Promi
   try {
     return await write();
   } catch (err) {
-    if (err instanceof InstallmentsExceedTotalError) throw new HttpException({ error: err.message }, 400);
+    if (err instanceof InstallmentsExceedTotalError || err instanceof InstallmentAllocationError) throw new HttpException({ error: err.message }, 400);
     throw err;
   }
 }
@@ -217,14 +217,14 @@ export class BudgetController {
 
   @RequirePermission('budget_edit')
   @Put(':id/members')
-  updateMembers(
+  async updateMembers(
     @CurrentUser() user: User,
     @Param('tripId') tripId: string,
     @Param('id') id: string,
     @Body() body: BudgetUpdateMembersDto,
     @Headers('x-socket-id') socketId?: string,
   ) {
-    const result = this.budget.updateMembers(id, tripId, body.user_ids);
+    const result = await refuseOverfullInstallments(() => this.budget.updateMembers(id, tripId, body.user_ids));
     if (!result) {
       throw new HttpException({ error: 'Budget item not found' }, 404);
     }

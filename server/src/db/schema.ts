@@ -282,6 +282,13 @@ function createTables(db: Database.Database): void {
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP
     );
 
+    CREATE TABLE IF NOT EXISTS budget_item_installment_members (
+      installment_id INTEGER NOT NULL REFERENCES budget_item_installments(id) ON DELETE CASCADE,
+      user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      amount REAL NOT NULL CHECK (amount >= 0),
+      PRIMARY KEY (installment_id, user_id)
+    );
+
     -- Addon system
     CREATE TABLE IF NOT EXISTS addons (
       id TEXT PRIMARY KEY,
@@ -565,6 +572,7 @@ function createTables(db: Database.Database): void {
     CREATE INDEX IF NOT EXISTS idx_packing_items_trip_id ON packing_items(trip_id);
     CREATE INDEX IF NOT EXISTS idx_budget_items_trip_id ON budget_items(trip_id);
     CREATE INDEX IF NOT EXISTS idx_budget_item_installments_item ON budget_item_installments(budget_item_id);
+    CREATE INDEX IF NOT EXISTS idx_budget_item_installment_members_user ON budget_item_installment_members(user_id);
     CREATE INDEX IF NOT EXISTS idx_reservations_trip_id ON reservations(trip_id);
     CREATE INDEX IF NOT EXISTS idx_trip_files_trip_id ON trip_files(trip_id);
     CREATE INDEX IF NOT EXISTS idx_day_notes_day_id ON day_notes(day_id);

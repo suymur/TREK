@@ -902,9 +902,14 @@ describe('folded trip CRUD', () => {
 
   it('TRIP-SVC-063: copying a trip copies the installments of an expense, all open again', () => {
     const { user } = createUser(testDb);
+    const { user: friend } = createUser(testDb);
     const trip = createTrip(testDb, user.id, { title: 'Origin', start_date: '2025-06-01', end_date: '2025-06-02' });
     const itemId = Number(testDb.prepare("INSERT INTO budget_items (trip_id, category, name, total_price) VALUES (?, 'accommodation', 'Hotel', 3000)").run(trip.id).lastInsertRowid);
     testDb.prepare("INSERT INTO budget_item_installments (budget_item_id, label, amount, due_date, paid_at, sort_order) VALUES (?, 'Deposit', 1000, '2025-05-01', '2025-04-20', 0), (?, 'Remainder', 2000, '2025-06-01', NULL, 1)").run(itemId, itemId);
+    testDb.prepare('INSERT INTO budget_item_members (budget_item_id, user_id, amount) VALUES (?, ?, 1500), (?, ?, 1500)').run(itemId, user.id, itemId, friend.id);
+    const deposit = testDb.prepare("SELECT id FROM budget_item_installments WHERE budget_item_id = ? AND label = 'Deposit'").get(itemId) as { id: number };
+    testDb.prepare('INSERT INTO budget_item_installment_members (installment_id, user_id, amount) VALUES (?, ?, 500), (?, ?, 500)')
+      .run(deposit.id, user.id, deposit.id, friend.id);
 
     const newTripId = svc.copy(trip.id, user.id, 'Clone');
 
@@ -915,6 +920,14 @@ describe('folded trip CRUD', () => {
     expect(rows).toEqual([
       { label: 'Deposit', amount: 1000, due_date: '2025-05-01', paid_at: null, sort_order: 0 },
       { label: 'Remainder', amount: 2000, due_date: '2025-06-01', paid_at: null, sort_order: 1 },
+    ]);
+    expect(testDb.prepare(`
+      SELECT im.user_id, im.amount FROM budget_item_installment_members im
+      JOIN budget_item_installments i ON i.id = im.installment_id
+      JOIN budget_items b ON b.id = i.budget_item_id
+      WHERE b.trip_id = ? AND i.label = 'Deposit' ORDER BY im.user_id
+    `).all(newTripId)).toEqual([
+      { user_id: user.id, amount: 500 }, { user_id: friend.id, amount: 500 },
     ]);
     // The source keeps its paid deposit.
     expect(testDb.prepare("SELECT paid_at FROM budget_item_installments WHERE budget_item_id = ? AND label = 'Deposit'").get(itemId))

@@ -9,7 +9,7 @@ import { DatabaseService } from '../database/database.service';
 import { TripMembershipService } from '../trip-membership/trip-membership.service';
 import { ADDON_IDS } from '../../addons';
 import { BudgetService } from './budget.service';
-import { InstallmentsExceedTotalError } from './budget-installments';
+import { InstallmentAllocationError, InstallmentsExceedTotalError } from './budget-installments';
 
 /** Costs are budget items, and the app edits them under 'budget_edit'. */
 const BUDGET_EDIT_ACTION = 'budget_edit';
@@ -22,7 +22,7 @@ async function refuseOverfullInstallments<T>(write: () => Promise<T>): Promise<T
   try {
     return await write();
   } catch (err) {
-    if (err instanceof InstallmentsExceedTotalError) throw new BadParams(`invalid cost: ${err.message}`);
+    if (err instanceof InstallmentsExceedTotalError || err instanceof InstallmentAllocationError) throw new BadParams(`invalid cost: ${err.message}`);
     throw err;
   }
 }

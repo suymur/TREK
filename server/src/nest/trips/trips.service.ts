@@ -789,9 +789,26 @@ export class TripsService {
         SELECT bii.* FROM budget_item_installments bii JOIN budget_items b ON b.id = bii.budget_item_id WHERE b.trip_id = ?
       `).all(sourceTripId) as any[];
       const insertInstallment = this.db.prepare('INSERT INTO budget_item_installments (budget_item_id, label, amount, due_date, paid_at, sort_order) VALUES (?, ?, ?, ?, NULL, ?)');
+      const installmentMap = new Map<number, number | bigint>();
       for (const bi of oldInstallments) {
         const newItemId = budgetMap.get(bi.budget_item_id);
-        if (newItemId) insertInstallment.run(newItemId, bi.label, bi.amount, bi.due_date, bi.sort_order);
+        if (newItemId) {
+          const inserted = insertInstallment.run(newItemId, bi.label, bi.amount, bi.due_date, bi.sort_order);
+          installmentMap.set(bi.id, inserted.lastInsertRowid);
+        }
+      }
+      // The copier keeps budget participant user IDs unchanged, so each deposit
+      // allocation follows the mapped installment and still points at the same
+      // copied expense member. Paid dates reset; allocations describe the split.
+      const oldAllocations = this.db.prepare(`
+        SELECT im.* FROM budget_item_installment_members im
+        JOIN budget_item_installments i ON i.id = im.installment_id
+        JOIN budget_items b ON b.id = i.budget_item_id WHERE b.trip_id = ?
+      `).all(sourceTripId) as { installment_id: number; user_id: number; amount: number }[];
+      const insertAllocation = this.db.prepare('INSERT INTO budget_item_installment_members (installment_id, user_id, amount) VALUES (?, ?, ?)');
+      for (const allocation of oldAllocations) {
+        const newInstallmentId = installmentMap.get(allocation.installment_id);
+        if (newInstallmentId) insertAllocation.run(newInstallmentId, allocation.user_id, allocation.amount);
       }
 
       const oldBags = this.db.prepare('SELECT * FROM packing_bags WHERE trip_id = ?').all(sourceTripId) as any[];

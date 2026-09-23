@@ -149,6 +149,8 @@ export const budgetItemInstallmentSchema = z.object({
   paid_at: z.string().nullable(),
   sort_order: z.number(),
   created_at: z.string().optional(),
+  /** Explicit shares of this deposit; empty for installments saved by older clients. */
+  members: z.array(z.object({ user_id: z.number().int().positive(), amount: z.number().nonnegative() })),
 });
 export type BudgetItemInstallment = z.infer<typeof budgetItemInstallmentSchema>;
 
@@ -168,6 +170,8 @@ export const budgetInstallmentInputSchema = z.object({
   amount: z.number().min(0.005),
   due_date: z.iso.date().nullable().optional(),
   paid_at: z.iso.date().nullable().optional(),
+  /** Omitted preserves an existing allocation (or leaves a new legacy row unallocated). */
+  members: z.array(z.object({ user_id: z.number().int().positive(), amount: z.number().nonnegative() })).optional(),
 });
 export type BudgetInstallmentInput = z.infer<typeof budgetInstallmentInputSchema>;
 

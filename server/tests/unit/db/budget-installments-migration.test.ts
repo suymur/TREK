@@ -27,6 +27,8 @@ describe('budget_item_installments migration', () => {
     try {
       const cols = (db.prepare("SELECT name FROM pragma_table_info('budget_item_installments')").all() as { name: string }[]).map(c => c.name);
       expect(cols).toEqual(['id', 'budget_item_id', 'label', 'amount', 'due_date', 'paid_at', 'sort_order', 'created_at']);
+      const memberCols = (db.prepare("SELECT name FROM pragma_table_info('budget_item_installment_members')").all() as { name: string }[]).map(c => c.name);
+      expect(memberCols).toEqual(['installment_id', 'user_id', 'amount']);
       expect(db.prepare('SELECT COUNT(*) AS n FROM budget_item_installments').get()).toEqual({ n: 0 });
     } finally {
       db.close();
@@ -36,11 +38,13 @@ describe('budget_item_installments migration', () => {
   it('MIGRATE-INSTALLMENTS-002: running the step twice keeps the rows', () => {
     const db = migratedDb();
     try {
-      db.prepare("INSERT INTO budget_item_installments (budget_item_id, label, amount) VALUES (1, 'Deposit', 1000)").run();
+      const installmentId = Number(db.prepare("INSERT INTO budget_item_installments (budget_item_id, label, amount) VALUES (1, 'Deposit', 1000)").run().lastInsertRowid);
+      db.prepare('INSERT INTO budget_item_installment_members (installment_id, user_id, amount) VALUES (?, 1, 1000)').run(installmentId);
       const version = (db.prepare('SELECT version FROM schema_version').get() as { version: number }).version;
       db.prepare('UPDATE schema_version SET version = ?').run(version - 1);
       runMigrations(db);
       expect(db.prepare('SELECT label, amount FROM budget_item_installments').all()).toEqual([{ label: 'Deposit', amount: 1000 }]);
+      expect(db.prepare('SELECT user_id, amount FROM budget_item_installment_members').all()).toEqual([{ user_id: 1, amount: 1000 }]);
     } finally {
       db.close();
     }
@@ -49,10 +53,12 @@ describe('budget_item_installments migration', () => {
   it('MIGRATE-INSTALLMENTS-003: deleting the expense deletes its installments; a zero amount is refused', () => {
     const db = migratedDb();
     try {
-      db.prepare("INSERT INTO budget_item_installments (budget_item_id, label, amount) VALUES (1, 'Deposit', 1000)").run();
+      const installmentId = Number(db.prepare("INSERT INTO budget_item_installments (budget_item_id, label, amount) VALUES (1, 'Deposit', 1000)").run().lastInsertRowid);
+      db.prepare('INSERT INTO budget_item_installment_members (installment_id, user_id, amount) VALUES (?, 1, 1000)').run(installmentId);
       expect(() => db.prepare("INSERT INTO budget_item_installments (budget_item_id, label, amount) VALUES (1, 'x', 0)").run()).toThrow();
       db.prepare('DELETE FROM budget_items WHERE id = 1').run();
       expect(db.prepare('SELECT COUNT(*) AS n FROM budget_item_installments').get()).toEqual({ n: 0 });
+      expect(db.prepare('SELECT COUNT(*) AS n FROM budget_item_installment_members').get()).toEqual({ n: 0 });
     } finally {
       db.close();
     }

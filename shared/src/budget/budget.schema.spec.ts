@@ -104,6 +104,11 @@ describe('installments', () => {
       true,
     );
     expect(budgetUpdateItemRequestSchema.safeParse({ installments: [] }).success).toBe(true);
+    expect(
+      budgetUpdateItemRequestSchema.safeParse({
+        installments: [{ label: 'Deposit', amount: 5, members: [{ user_id: 1, amount: 5 }] }],
+      }).success,
+    ).toBe(true);
   });
 
   it('refuses a zero or negative amount, a bad day and an overlong label', () => {
@@ -111,6 +116,9 @@ describe('installments', () => {
     expect(budgetInstallmentInputSchema.safeParse({ label: 'x', amount: 0.001 }).success).toBe(false);
     expect(budgetInstallmentInputSchema.safeParse({ label: 'x', amount: 0.01 }).success).toBe(true);
     expect(budgetInstallmentInputSchema.safeParse({ label: 'x', amount: -5 }).success).toBe(false);
+    expect(
+      budgetInstallmentInputSchema.safeParse({ label: 'x', amount: 5, members: [{ user_id: 1, amount: -1 }] }).success,
+    ).toBe(false);
     expect(budgetInstallmentInputSchema.safeParse({ label: 'x', amount: 5, due_date: '01.10.2026' }).success).toBe(
       false,
     );
@@ -142,6 +150,7 @@ describe('installments', () => {
           due_date: null,
           paid_at: '2026-09-20',
           sort_order: 0,
+          members: [{ user_id: 1, amount: 1000 }],
         },
       ],
       paid_amount: 1000,

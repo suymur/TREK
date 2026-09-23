@@ -126,9 +126,83 @@ describe('Budget installments e2e (real auth guard + temp SQLite)', () => {
     expect(listed.open_amount).toBe(2000);
   });
 
+  it('splits two deposits independently while settlement stays on the full shares', async () => {
+    const created = await api().post({
+      name: 'Shared stay', total_price: 839.30,
+      payers: [{ user_id: 1, amount: 839.30 }],
+      members: [{ user_id: 1, amount: 419.65 }, { user_id: 2, amount: 419.65 }],
+      installments: [
+        { label: 'First deposit', amount: 200, members: [{ user_id: 1, amount: 100 }, { user_id: 2, amount: 100 }] },
+        { label: 'Second deposit', amount: 100, members: [{ user_id: 1, amount: 0 }, { user_id: 2, amount: 100 }] },
+      ],
+    });
+    expect(created.status).toBe(201);
+    const itemId = created.body.item.id;
+    expect(created.body.item.installments.map((i: { members: unknown }) => i.members)).toEqual([
+      [{ user_id: 1, amount: 100 }, { user_id: 2, amount: 100 }],
+      [{ user_id: 1, amount: 0 }, { user_id: 2, amount: 100 }],
+    ]);
+    expect(created.body.item.members).toEqual([
+      expect.objectContaining({ user_id: 1, amount: 419.65 }),
+      expect.objectContaining({ user_id: 2, amount: 419.65 }),
+    ]);
+    const before = await request(server).get(`/api/trips/${tripId}/budget/settlement`).set('Cookie', sessionCookie(1));
+    expect(before.status).toBe(200);
+    const paid = await api().paid(itemId, created.body.item.installments[0].id, '2026-09-23');
+    expect(paid.status).toBe(200);
+    expect(paid.body.item).toMatchObject({ paid_amount: 200, open_amount: 639.30 });
+    const after = await request(server).get(`/api/trips/${tripId}/budget/settlement`).set('Cookie', sessionCookie(1));
+    expect(after.status).toBe(200);
+    expect(after.body).toEqual(before.body);
+  });
+
+  it('rolls back deposits that exceed one member’s full share or have an invalid split', async () => {
+    const body = {
+      name: 'Shared stay', total_price: 839.30,
+      members: [{ user_id: 1, amount: 419.65 }, { user_id: 2, amount: 419.65 }],
+      installments: [
+        { label: 'First', amount: 200, members: [{ user_id: 1, amount: 200 }] },
+        { label: 'Second', amount: 300, members: [{ user_id: 1, amount: 300 }] },
+      ],
+    };
+    const before = (db.prepare('SELECT COUNT(*) AS n FROM budget_items').get() as { n: number }).n;
+    const over = await api().post(body);
+    expect(over.status).toBe(400);
+    expect(over.body.error).toMatch(/deposits exceed/);
+    expect((db.prepare('SELECT COUNT(*) AS n FROM budget_items').get() as { n: number }).n).toBe(before);
+
+    const wrongSum = await api().post({ ...body, installments: [{ label: 'Wrong', amount: 200, members: [{ user_id: 1, amount: 199.99 }] }] });
+    expect(wrongSum.status).toBe(400);
+    expect(wrongSum.body.error).toMatch(/split must add up/);
+    const outsider = await api().post({ ...body, members: [{ user_id: 1, amount: 839.30 }], installments: [{ label: 'Wrong', amount: 200, members: [{ user_id: 2, amount: 200 }] }] });
+    expect(outsider.status).toBe(400);
+    expect(outsider.body.error).toMatch(/not part of the expense split/);
+  });
+
+  it('rejects a member change that would leave a stale deposit allocation', async () => {
+    const created = await api().post({
+      name: 'Stay', total_price: 200,
+      members: [{ user_id: 1, amount: 100 }, { user_id: 2, amount: 100 }],
+      installments: [{ label: 'Deposit', amount: 100, members: [{ user_id: 1, amount: 50 }, { user_id: 2, amount: 50 }] }],
+    });
+    expect(created.status).toBe(201);
+    const itemId = created.body.item.id;
+    const changed = await request(server).put(`/api/trips/${tripId}/budget/${itemId}/members`)
+      .set('Cookie', sessionCookie(1)).send({ user_ids: [1] });
+    expect(changed.status).toBe(400);
+    const current = await request(server).get(`/api/trips/${tripId}/budget`).set('Cookie', sessionCookie(1));
+    expect(current.body.items.find((i: { id: number }) => i.id === itemId).members).toHaveLength(2);
+  });
+
   it('an expense without installments is paid in full, as before', async () => {
     const res = await api().post({ name: 'Taxi', total_price: 20 });
     expect(res.body.item).toMatchObject({ installments: [], paid_amount: 20, open_amount: 0 });
+  });
+
+  it('accepts an unallocated deposit on a planning-only expense', async () => {
+    const res = await api().post({ name: 'Planned ticket', total_price: 100, member_ids: [], installments: [{ label: 'Deposit', amount: 20, members: [] }] });
+    expect(res.status).toBe(201);
+    expect(res.body.item.installments[0].members).toEqual([]);
   });
 
   it('400 when the installments add up to more than the total, and nothing is written', async () => {

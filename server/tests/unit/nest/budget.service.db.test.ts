@@ -1320,4 +1320,16 @@ describe('installments (fork #6)', () => {
     const ok = budget.updateBudgetItem(item.id, trip.id, { installments: [{ id, label: 'a', amount: 40 }, { id, label: 'b', amount: 60 }] })!;
     expect(ok.installments!.map(i => i.amount)).toEqual([40, 60]);
   });
+
+  it('BUDGET-SVC-DB-INST-006: removing a user clears that deposit allocation without dangling a partial split', () => {
+    const { alice, bob, trip } = seedPair();
+    const item = budget.createBudgetItem(trip.id, {
+      name: 'Stay', total_price: 200, members: [{ user_id: alice.id, amount: 100 }, { user_id: bob.id, amount: 100 }],
+      installments: [{ label: 'Deposit', amount: 100, members: [{ user_id: alice.id, amount: 50 }, { user_id: bob.id, amount: 50 }] }],
+    });
+    budget.removeUserFromBudgetItems(bob.id);
+    const after = budget.getBudgetItem(item.id, trip.id)!;
+    expect(after.members!.map(member => member.user_id)).toEqual([alice.id]);
+    expect(after.installments![0].members).toEqual([]);
+  });
 });

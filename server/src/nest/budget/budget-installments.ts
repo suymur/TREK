@@ -25,6 +25,42 @@ export class InstallmentsExceedTotalError extends Error {
   }
 }
 
+/** A deposit split is incompatible with the expense's full participant shares. */
+export class InstallmentAllocationError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'InstallmentAllocationError';
+  }
+}
+
+/**
+ * Validate explicit deposit allocations in cents. An empty member list is a
+ * legacy, unallocated installment and remains readable/editable by old clients.
+ * Paid status has no bearing on these shares or the settlement.
+ */
+export function assertInstallmentAllocations(
+  fullShares: ReadonlyMap<number, number>,
+  installments: Pick<BudgetItemInstallment, 'amount' | 'members'>[],
+): void {
+  const allocated = new Map<number, number>();
+  for (const installment of installments) {
+    if (installment.members.length === 0) continue;
+    const sum = installment.members.reduce((cents, member) => {
+      if (!fullShares.has(member.user_id)) throw new InstallmentAllocationError('A deposit participant is not part of the expense split.');
+      return cents + toCents(member.amount);
+    }, 0);
+    if (sum !== toCents(installment.amount)) throw new InstallmentAllocationError('Each deposit split must add up to its deposit amount.');
+    for (const member of installment.members) {
+      allocated.set(member.user_id, (allocated.get(member.user_id) ?? 0) + toCents(member.amount));
+    }
+  }
+  for (const [userId, cents] of allocated) {
+    if (cents > (fullShares.get(userId) ?? 0)) {
+      throw new InstallmentAllocationError('A participant’s deposits exceed their full expense share.');
+    }
+  }
+}
+
 /** Throws InstallmentsExceedTotalError when the amounts add up to more than `total`. */
 export function assertInstallmentsFit(total: number, amounts: number[]): void {
   if (amounts.length === 0) return;

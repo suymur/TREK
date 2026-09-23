@@ -3,7 +3,7 @@ import type { BudgetItem, BudgetItemInstallment } from '@trek/shared'
 import { duePayments, draftsExceedTotal, draftsToInput, installmentSummary, withInstallmentPaid } from './budgetInstallments'
 
 const installment = (id: number, amount: number, due_date: string | null, paid_at: string | null = null): BudgetItemInstallment => ({
-  id, budget_item_id: 1, label: `Payment ${id}`, amount, due_date, paid_at, sort_order: id,
+  id, budget_item_id: 1, label: `Payment ${id}`, amount, due_date, paid_at, sort_order: id, members: [],
 })
 
 const item = (installments: BudgetItemInstallment[]): BudgetItem => ({

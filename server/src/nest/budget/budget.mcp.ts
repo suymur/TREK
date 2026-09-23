@@ -14,7 +14,7 @@ import { noAccess, permissionDenied } from '../../mcp/tools/_shared';
 import { TripMembershipService } from '../trip-membership/trip-membership.service';
 import { DatabaseService } from '../database/database.service';
 import { BudgetService } from './budget.service';
-import { InstallmentsExceedTotalError } from './budget-installments';
+import { InstallmentAllocationError, InstallmentsExceedTotalError } from './budget-installments';
 import { ExchangeRatesService } from './exchange-rates.service';
 import { addonGate } from '../addons/addon-gate';
 import { AddonsService } from '../addons/addons.service';
@@ -43,7 +43,7 @@ async function refuseOverfullInstallments<T>(write: () => Promise<T> | T): Promi
   try {
     return await write();
   } catch (err) {
-    if (err instanceof InstallmentsExceedTotalError) return errorResult(err.message);
+    if (err instanceof InstallmentsExceedTotalError || err instanceof InstallmentAllocationError) return errorResult(err.message);
     throw err;
   }
 }
@@ -382,7 +382,13 @@ export class BudgetMcp {
     if (this.isDemoUser(ctx.userId)) return demoDenied();
     if (!this.budget.verifyTripAccess(tripId, ctx.userId)) return noAccess();
     if (!this.guards.hasTripPermission('budget_edit', tripId, ctx.userId)) return permissionDenied();
-    const result = this.budget.updateMembers(itemId, tripId, userIds);
+    let result: ReturnType<BudgetService['updateMembers']>;
+    try {
+      result = this.budget.updateMembers(itemId, tripId, userIds);
+    } catch (err) {
+      if (err instanceof InstallmentAllocationError || err instanceof InstallmentsExceedTotalError) return errorResult(err.message);
+      throw err;
+    }
     if (!result) return errorResult('Budget item not found.');
     const item = this.budget.getBudgetItem(itemId, tripId);
     this.guards.safeBroadcast(tripId, 'budget:members-updated', { itemId, members: result.members, persons: result.item.persons });

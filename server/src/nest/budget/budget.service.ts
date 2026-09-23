@@ -6,7 +6,7 @@ import { PermissionsService } from '../permissions/permissions.service';
 import { avatarUrl } from '../common/avatarUrl';
 import type { User, BudgetItem, BudgetItemMember, BudgetItemPayer, BudgetItemReceipt } from '../../types';
 import { ExchangeRatesService } from './exchange-rates.service';
-import { assertInstallmentsFit, installmentAmounts } from './budget-installments';
+import { assertInstallmentAllocations, assertInstallmentsFit, installmentAmounts, InstallmentAllocationError } from './budget-installments';
 
 type Trip = TripAccess;
 
@@ -295,7 +295,18 @@ export class BudgetService {
       WHERE budget_item_id IN (${itemIds.map(() => '?').join(',')})
       ORDER BY sort_order ASC, id ASC
     `, ...itemIds);
+    const memberRows = rows.length === 0 ? [] : this.db.all<{ installment_id: number; user_id: number; amount: number }>(`
+      SELECT installment_id, user_id, amount FROM budget_item_installment_members
+      WHERE installment_id IN (${rows.map(() => '?').join(',')}) ORDER BY user_id
+    `, ...rows.map(r => r.id));
+    const membersByInstallment = new Map<number, { user_id: number; amount: number }[]>();
+    for (const member of memberRows) {
+      const list = membersByInstallment.get(member.installment_id) ?? [];
+      list.push({ user_id: member.user_id, amount: member.amount });
+      membersByInstallment.set(member.installment_id, list);
+    }
     for (const r of rows) {
+      r.members = membersByInstallment.get(r.id) ?? [];
       const list = byItem.get(r.budget_item_id);
       if (list) list.push(r);
       else byItem.set(r.budget_item_id, [r]);
@@ -338,9 +349,15 @@ export class BudgetService {
     const insert = this.db.prepare(
       'INSERT INTO budget_item_installments (budget_item_id, label, amount, due_date, paid_at, sort_order) VALUES (?, ?, ?, ?, ?, ?)',
     );
+    const removeMembers = this.db.prepare('DELETE FROM budget_item_installment_members WHERE installment_id = ?');
+    const insertMember = this.db.prepare('INSERT INTO budget_item_installment_members (installment_id, user_id, amount) VALUES (?, ?, ?)');
+    const expenseMembers = new Set(this.db.all<{ user_id: number }>(
+      'SELECT user_id FROM budget_item_members WHERE budget_item_id = ?', itemId,
+    ).map(m => m.user_id));
     const updated = new Set<number>();
     inputs.forEach((inst, idx) => {
       const amount = Math.round(inst.amount * 100) / 100;
+      let installmentId: number;
       // The same id twice would write one row twice and lose the second amount
       // from the sum check, so a repeat is stored as a row of its own.
       if (inst.id !== undefined && kept.has(inst.id) && !updated.has(inst.id)) {
@@ -351,8 +368,25 @@ export class BudgetService {
           inst.paid_at !== undefined ? 1 : 0, inst.paid_at ?? null,
           inst.id,
         );
+        installmentId = inst.id;
       } else {
-        insert.run(itemId, inst.label, amount, inst.due_date ?? null, inst.paid_at ?? null, idx);
+        installmentId = Number(insert.run(itemId, inst.label, amount, inst.due_date ?? null, inst.paid_at ?? null, idx).lastInsertRowid);
+      }
+      if (inst.members !== undefined) {
+        const seen = new Set<number>();
+        // Planning-only expenses have no participant split to allocate against.
+        // For a split expense, an explicit empty list would silently erase its
+        // deposit split; older omitted lists remain readable as legacy rows.
+        if (inst.members.length === 0 && expenseMembers.size > 0) {
+          throw new InstallmentAllocationError('A deposit split needs at least one expense participant.');
+        }
+        for (const member of inst.members) {
+          if (!expenseMembers.has(member.user_id)) throw new InstallmentAllocationError('A deposit participant is not part of the expense split.');
+          if (seen.has(member.user_id)) throw new InstallmentAllocationError('A deposit participant is listed more than once.');
+          seen.add(member.user_id);
+        }
+        removeMembers.run(installmentId);
+        for (const member of inst.members) insertMember.run(installmentId, member.user_id, Math.round(member.amount * 100) / 100);
       }
     });
   }
@@ -367,6 +401,22 @@ export class BudgetService {
     const row = this.db.get<{ total_price: number }>('SELECT total_price FROM budget_items WHERE id = ?', itemId);
     const amounts = this.db.all<{ amount: number }>('SELECT amount FROM budget_item_installments WHERE budget_item_id = ?', itemId).map(r => r.amount);
     assertInstallmentsFit(row?.total_price ?? 0, amounts);
+    this.assertItemInstallmentAllocations(itemId, row?.total_price ?? 0);
+  }
+
+  private assertItemInstallmentAllocations(itemId: number | string, total: number): void {
+    const members = this.db.all<{ user_id: number; amount: number | null }>(
+      'SELECT user_id, amount FROM budget_item_members WHERE budget_item_id = ? ORDER BY user_id', itemId,
+    );
+    const fullShares = new Map<number, number>();
+    const totalCents = Math.round(total * 100);
+    const hasCustom = members.some(m => m.amount !== null);
+    const equal = hasCustom ? {} : splitEqualShares(totalCents, members, Number(itemId));
+    for (const member of members) {
+      fullShares.set(member.user_id, hasCustom ? Math.round((member.amount ?? 0) * 100) : (equal[member.user_id] ?? 0));
+    }
+    const installments = this.loadInstallmentsByItem([Number(itemId)]).get(Number(itemId)) ?? [];
+    assertInstallmentAllocations(fullShares, installments);
   }
 
   /**
@@ -931,9 +981,11 @@ export class BudgetService {
       }
 
       // loadItemMembers already applies avatar_url — the legacy second .map was redundant.
+      this.assertItemInstallmentsFit(id);
       const members = this.loadItemMembers(id);
       const updated = this.db.get<BudgetItem>('SELECT * FROM budget_items WHERE id = ?', id)!;
-      return { members, item: updated };
+      updated.members = members;
+      return { members, item: this.attachInstallments(updated) };
     });
   }
 
@@ -947,6 +999,16 @@ export class BudgetService {
         return;
       }
 
+      // A deleted participant cannot retain a deposit allocation. Clear the
+      // whole affected deposit split, leaving that installment unallocated for
+      // the remaining participants to divide explicitly later.
+      const affectedDeposits = this.db.all<{ installment_id: number }>(
+        'SELECT DISTINCT installment_id FROM budget_item_installment_members WHERE user_id = ?', userId,
+      );
+      for (const { installment_id } of affectedDeposits) {
+        this.db.run('DELETE FROM budget_item_installment_members WHERE installment_id = ?', installment_id);
+      }
+
       this.db.run('DELETE FROM budget_item_members WHERE user_id = ?', userId);
 
       const remaining = this.db.prepare('SELECT COUNT(*) AS count FROM budget_item_members WHERE budget_item_id = ?');
@@ -954,6 +1016,7 @@ export class BudgetService {
       for (const itemId of itemIds) {
         const { count } = remaining.get(itemId) as { count: number };
         setPersons.run(count || null, itemId);
+        this.assertItemInstallmentsFit(itemId);
       }
     });
   }

@@ -5267,6 +5267,19 @@ function runMigrations(db: Database.Database): void {
         CREATE INDEX IF NOT EXISTS idx_budget_item_installments_item ON budget_item_installments(budget_item_id);
       `);
     },
+
+    /* Per-deposit participant shares (#6). Existing installments stay unallocated. */
+    () => {
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS budget_item_installment_members (
+          installment_id INTEGER NOT NULL REFERENCES budget_item_installments(id) ON DELETE CASCADE,
+          user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+          amount REAL NOT NULL CHECK (amount >= 0),
+          PRIMARY KEY (installment_id, user_id)
+        );
+        CREATE INDEX IF NOT EXISTS idx_budget_item_installment_members_user ON budget_item_installment_members(user_id);
+      `);
+    },
   ];
 
   if (currentVersion < migrations.length) {
