@@ -156,6 +156,9 @@ describe('costsModel — computeTotals', () => {
 
     expect(computeTotals([paid, unpaid], flows, ctx)).toEqual({
       totalSpend: 125,
+      estimated: 0,
+      planned: 125,
+      estimateCount: 0,
       myPaid: 100,
       myShare: 50,
       owe: 20,
@@ -168,6 +171,9 @@ describe('costsModel — computeTotals', () => {
   it('FE-MOB-CMOD-011: returns zeroes for an empty trip', () => {
     expect(computeTotals([], [], ctx)).toEqual({
       totalSpend: 0,
+      estimated: 0,
+      planned: 0,
+      estimateCount: 0,
       myPaid: 0,
       myShare: 0,
       owe: 0,
@@ -431,10 +437,10 @@ describe('costsModel — CSV export', () => {
     });
 
     const rows = content.split('\r\n');
-    expect(rows[0]).toBe('Date;Name;Category;Amount;Currency;Amount (EUR);Note');
-    expect(rows[1]).toBe('07/15/2026;Coffee;costs.cat.food;4.50;EUR;4.50;');
+    expect(rows[0]).toBe('Date;Name;Category;Amount;Currency;Amount (EUR);Note;Status');
+    expect(rows[1]).toBe('07/15/2026;Coffee;costs.cat.food;4.50;EUR;4.50;;final');
     // JPY is a zero-decimal currency, the base column stays at 2
-    expect(rows[2]).toBe('07/16/2026;Ryokan;costs.cat.accommodation;1500;JPY;15.00;paid cash');
+    expect(rows[2]).toBe('07/16/2026;Ryokan;costs.cat.accommodation;1500;JPY;15.00;paid cash;final');
     expect(filename).toBe('costs-Trip Tokyo2026.csv');
   });
 
@@ -471,7 +477,7 @@ describe('costsModel — CSV export', () => {
     expect(rows[1]).toContain('"say ""hi""\nlater"');
     // undated rows keep an empty date cell
     expect(rows[1].startsWith(';')).toBe(true);
-    expect(rows[2].endsWith(';')).toBe(true);
+    expect(rows[2].endsWith(';;final')).toBe(true);
     expect(filename).toBe('costs-trip.csv');
   });
 
@@ -515,6 +521,42 @@ describe('costsModel — CSV export', () => {
       locale: 'en-US',
       t,
     });
-    expect(content.split('\r\n')[1]).toBe(';Placeholder;costs.cat.other;0.00;EUR;0.00;');
+    expect(content.split('\r\n')[1]).toBe(';Placeholder;costs.cat.other;0.00;EUR;0.00;;final');
+  });
+});
+
+describe('costsModel — estimate / final', () => {
+  const estimate = expense({
+    id: 60,
+    name: 'Hotel',
+    total_price: 200,
+    cost_status: 'estimate',
+    payers: [payer(1, 200)],
+    members: [member(1), member(2)],
+  });
+  const spent = expense({ id: 61, total_price: 50, payers: [payer(1, 50)], members: [member(1), member(2)] });
+
+  it('FE-MOB-CMOD-030: an estimate counts as estimated and planned, never as spend, paid or share', () => {
+    const totals = computeTotals([estimate, spent], [], ctx);
+    expect(totals).toMatchObject({ totalSpend: 50, estimated: 200, planned: 250, estimateCount: 1, myPaid: 50, myShare: 25 });
+    expect(myPaidOf(estimate, ctx)).toBe(0);
+    expect(myShareOf(estimate, ctx)).toBe(0);
+  });
+
+  it('FE-MOB-CMOD-031: an unpaid estimate is a plan, not an outstanding bill', () => {
+    const unpaidEstimate = expense({ id: 62, total_price: 80, cost_status: 'estimate', payers: [] });
+    expect(isUnfinished(unpaidEstimate, ctx)).toBe(false);
+    expect(computeTotals([unpaidEstimate], [], ctx)).toMatchObject({ outstanding: 0, outstandingCount: 0, estimated: 80 });
+  });
+
+  it('FE-MOB-CMOD-032: the "mine" and "owed" filters leave an estimate out', () => {
+    expect(filterBudgetItems([estimate, spent], filters({ segment: 'mine' }), ctx).map(e => e.id)).toEqual([61]);
+    expect(filterBudgetItems([estimate, spent], filters({ segment: 'owed' }), ctx).map(e => e.id)).toEqual([61]);
+  });
+
+  it('FE-MOB-CMOD-033: the CSV carries the status of every row', () => {
+    const { content } = buildCostsCsv([estimate, spent], { base: 'EUR', ctx, locale: 'en-US', t: (k: string) => k });
+    const rows = content.split('\r\n');
+    expect(rows.slice(1).map(r => r.split(';').pop()).sort()).toEqual(['estimate', 'final']);
   });
 });

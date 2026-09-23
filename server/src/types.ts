@@ -1,4 +1,5 @@
 import { Request } from 'express';
+import type { CostStatus } from '@trek/shared';
 
 export interface User {
   id: number;
@@ -163,6 +164,8 @@ export interface BudgetItem {
   place_id?: number | null;
   paid_by_user_id?: number | null;
   expense_date?: string | null;
+  /** `estimate` = a planned cost, kept out of the settlement; `final` = the real cost. */
+  cost_status?: CostStatus;
   sort_order: number;
   created_at?: string;
   members?: BudgetItemMember[];

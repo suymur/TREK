@@ -575,7 +575,7 @@ describe('CostsPanel — settlements in the ledger', () => {
 
     expect(exported).toBeTruthy()
     const text = await exported!.text()
-    expect(text).toContain('Date;Name;Category;Amount;Currency;Amount (EUR);Note')
+    expect(text).toContain('Date;Name;Category;Amount;Currency;Amount (EUR);Note;Status')
     expect(text).toContain('"Dinner; tapas"') // separator inside the name gets quoted
     expect(text).toContain('Food & drink')    // category label, not the raw key
     expect(text).toContain('90.00;EUR')
@@ -1697,12 +1697,12 @@ describe('CostsPanel — remaining paths', () => {
     fireEvent.click(screen.getByTitle('Export CSV'))
 
     const lines = (await exported!.text()).replace(/^\uFEFF/, '').split('\r\n')
-    expect(lines[0]).toBe('Date;Name;Category;Amount;Currency;Amount (EUR);Note')
+    expect(lines[0]).toBe('Date;Name;Category;Amount;Currency;Amount (EUR);Note;Status')
     // Oldest first, dateless rows leading.
-    expect(lines[1]).toBe(';Tip;Tips;5.00;EUR;5.00;')
+    expect(lines[1]).toBe(';Tip;Tips;5.00;EUR;5.00;;final')
     // The ticket payload is machine data, so it never reaches the note column.
-    expect(lines[2]).toBe('06/14/2025;Tickets;Activities;20.00;EUR;20.00;')
-    expect(lines[3]).toBe('06/15/2025;"Dinner ""deluxe""";Food & drink;90.00;EUR;90.00;"with;semicolon"')
+    expect(lines[2]).toBe('06/14/2025;Tickets;Activities;20.00;EUR;20.00;;final')
+    expect(lines[3]).toBe('06/15/2025;"Dinner ""deluxe""";Food & drink;90.00;EUR;90.00;"with;semicolon";final')
     // A title made only of illegal characters still yields a usable file name.
     expect(downloadName).toBe('costs-.csv')
     createObjURL.mockRestore(); revokeObjURL.mockRestore(); clickSpy.mockRestore()
@@ -1723,8 +1723,8 @@ describe('CostsPanel — remaining paths', () => {
     fireEvent.click(screen.getByTitle('Export CSV'))
 
     const lines = (await exported!.text()).replace(/^\uFEFF/, '').split('\r\n')
-    expect(lines[1]).toBe('06/15/2025;"\'=HYPERLINK(""http://evil"",""click"")";Food & drink;12.00;EUR;12.00;\'@SUM(A1:A9)')
-    expect(lines[2]).toBe('06/16/2025;\'-5 refund;Other;5.00;EUR;5.00;')
+    expect(lines[1]).toBe('06/15/2025;"\'=HYPERLINK(""http://evil"",""click"")";Food & drink;12.00;EUR;12.00;\'@SUM(A1:A9);final')
+    expect(lines[2]).toBe('06/16/2025;\'-5 refund;Other;5.00;EUR;5.00;;final')
     createObjURL.mockRestore(); revokeObjURL.mockRestore(); clickSpy.mockRestore()
   })
 
@@ -2291,5 +2291,87 @@ describe('CostsPanel — expense modal in another language', () => {
     await user.click(screen.getByRole('button', { name: /bob/i }))
     expect(screen.getByText('Nicht dabei')).toBeInTheDocument()
     expect(screen.queryByText('Excluded')).not.toBeInTheDocument()
+  })
+})
+
+describe('CostsPanel — estimate / final (fork #3)', () => {
+  beforeEach(seedAlice)
+
+  const hotelEstimate = () => expense({
+    id: 301, name: 'Hotel', category: 'accommodation', total_price: 200, expense_date: '2025-06-15', cost_status: 'estimate',
+    payers: [{ user_id: 1, amount: 200 }],
+    members: [{ user_id: 1, username: 'alice' }, { user_id: 2, username: 'bob' }],
+  })
+
+  it('FE-W5COSTS-EST-001: an estimate gets a chip, and the summary shows estimated and planned beside the final spend', async () => {
+    mount([dinner(), hotelEstimate()])
+
+    const row = (await screen.findByText('Hotel')).closest('.exp-row') as HTMLElement
+    expect(within(row).getByTestId('estimate-chip')).toHaveTextContent('est.')
+    // No "you lent" on an estimate: it stays out of the settlement.
+    expect(within(row).queryByText(/you lent|you borrowed/)).toBeNull()
+    expect(within((await screen.findByText('Dinner')).closest('.exp-row') as HTMLElement).queryByTestId('estimate-chip')).toBeNull()
+
+    const card = screen.getByText('Total trip spend').closest('div[style*="border-radius: 22"]') as HTMLElement
+    const line = within(card).getByTestId('cost-status-totals')
+    expect(line).toHaveTextContent('Estimated · 200 €')
+    expect(line).toHaveTextContent('Planned · 290 €')
+    // The day's "spent" line sums the final expense only.
+    expect(screen.getByText('90,00 € spent')).toBeInTheDocument()
+  })
+
+  it('FE-W5COSTS-EST-002: a trip without estimates shows no estimated/planned line', async () => {
+    mount([dinner()])
+    await screen.findByText('Dinner')
+    expect(screen.queryByTestId('cost-status-totals')).toBeNull()
+  })
+
+  it('FE-W5COSTS-EST-003: a new expense saved as an estimate sends cost_status estimate', async () => {
+    const user = userEvent.setup()
+    let posted: Record<string, unknown> | null = null
+    server.use(http.post('/api/trips/1/budget', async ({ request }) => {
+      posted = await request.json() as Record<string, unknown>
+      return HttpResponse.json({ item: { ...buildBudgetItem({ trip_id: 1, name: 'Museum' }), id: 7 } })
+    }))
+    mount([])
+
+    await user.click(await screen.findByRole('button', { name: 'Add expense' }))
+    await user.type(await screen.findByPlaceholderText('e.g. Dinner, souvenirs, gas…'), 'Museum')
+    await user.type(screen.getAllByPlaceholderText('0,00')[0], '30')
+    expect(screen.getByRole('radio', { name: 'Final' })).toHaveAttribute('aria-checked', 'true')
+    await user.click(screen.getByRole('radio', { name: 'Estimate' }))
+    expect(screen.getByRole('radio', { name: 'Estimate' })).toHaveAttribute('aria-checked', 'true')
+
+    const addBtns = screen.getAllByRole('button', { name: 'Add expense' })
+    await user.click(addBtns[addBtns.length - 1])
+    await waitFor(() => expect(posted).toBeTruthy())
+    expect(posted!.cost_status).toBe('estimate')
+    expect(posted!.total_price).toBe(30)
+  })
+
+  it('FE-W5COSTS-EST-004: turning an estimate final keeps the amount, says so, and saves the corrected one', async () => {
+    const user = userEvent.setup()
+    let put: Record<string, unknown> | null = null
+    server.use(http.put('/api/trips/1/budget/301', async ({ request }) => {
+      put = await request.json() as Record<string, unknown>
+      return HttpResponse.json({ item: hotelEstimate() })
+    }))
+    mount([hotelEstimate()])
+
+    await screen.findByText('Hotel')
+    await user.click(screen.getByTitle('Edit'))
+    expect(await screen.findByRole('radio', { name: 'Estimate' })).toHaveAttribute('aria-checked', 'true')
+
+    await user.click(screen.getByRole('radio', { name: 'Final' }))
+    expect(screen.getByText('The estimated amount stays in place. Correct it if the real cost differs.')).toBeInTheDocument()
+    const total = screen.getAllByPlaceholderText('0,00')[0] as HTMLInputElement
+    expect(total.value).toBe('200,00')
+
+    await user.clear(total)
+    await user.type(total, '185')
+    await user.click(screen.getByRole('button', { name: 'Save' }))
+    await waitFor(() => expect(put).toBeTruthy())
+    expect(put!.cost_status).toBe('final')
+    expect(put!.total_price).toBe(185)
   })
 })

@@ -953,3 +953,50 @@ describe('Budget tools: a custom split cannot be certified against a total the r
     });
   });
 });
+
+// ---------------------------------------------------------------------------
+// cost_status (estimate / final)
+// ---------------------------------------------------------------------------
+
+describe('Budget tools: estimate / final', () => {
+  function statusOf(itemId: number): string {
+    return (testDb.prepare('SELECT cost_status FROM budget_items WHERE id = ?').get(itemId) as { cost_status: string }).cost_status;
+  }
+
+  it('creates an estimate, keeps it out of the settlement, and turns it final', async () => {
+    const { user, other, trip } = tripWithTwo();
+    await withHarness(user.id, async (h) => {
+      const created = parseToolResult(await h.client.callTool({
+        name: 'create_budget_item',
+        arguments: { tripId: trip.id, name: 'Hotel', total_price: 200, cost_status: 'estimate', payers: [{ user_id: user.id, amount: 200 }], member_ids: [user.id, other.id] },
+      })) as any;
+      expect(created.item.cost_status).toBe('estimate');
+
+      const summary = parseToolResult(await h.client.callTool({ name: 'get_settlement_summary', arguments: { tripId: trip.id } })) as any;
+      expect(summary.summary.flows).toEqual([]);
+      expect(summary.summary.totals).toEqual({ final: 0, estimated: 200, planned: 200 });
+
+      await h.client.callTool({ name: 'update_budget_item', arguments: { tripId: trip.id, itemId: created.item.id, cost_status: 'final' } });
+      expect(statusOf(created.item.id)).toBe('final');
+      const after = parseToolResult(await h.client.callTool({ name: 'get_settlement_summary', arguments: { tripId: trip.id } })) as any;
+      expect(after.summary.flows).toHaveLength(1);
+      expect(after.summary.totals).toEqual({ final: 200, estimated: 0, planned: 200 });
+    });
+  });
+
+  it('defaults to final and refuses an unknown status', async () => {
+    const { user, trip } = tripWithTwo();
+    await withHarness(user.id, async (h) => {
+      const created = parseToolResult(await h.client.callTool({
+        name: 'create_budget_item', arguments: { tripId: trip.id, name: 'Taxi', total_price: 20 },
+      })) as any;
+      expect(statusOf(created.item.id)).toBe('final');
+
+      const bad = await h.client.callTool({
+        name: 'create_budget_item', arguments: { tripId: trip.id, name: 'Taxi', total_price: 20, cost_status: 'maybe' },
+      });
+      expect(bad.isError).toBe(true);
+      expect(itemCount(trip.id)).toBe(1);
+    });
+  });
+});

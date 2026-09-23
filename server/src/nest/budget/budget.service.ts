@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { DatabaseService, type TripAccess } from '../database/database.service';
-import type { BudgetParticipantFinal, TrekWsPayload, TrekWsTripEventName } from '@trek/shared';
+import type { BudgetCostTotals, BudgetParticipantFinal, CostStatus, TrekWsPayload, TrekWsTripEventName } from '@trek/shared';
 import { RealtimeService } from '../realtime/realtime.service';
 import { PermissionsService } from '../permissions/permissions.service';
 import { avatarUrl } from '../common/avatarUrl';
@@ -449,6 +449,7 @@ export class BudgetService {
       members?: { user_id: number; amount?: number | null }[];
       persons?: number | null; days?: number | null; note?: string | null; expense_date?: string | null;
       ticket_json?: string | null;
+      cost_status?: CostStatus;
       reservation_id?: number | null;
       place_id?: number | null;
       receipt_file_ids?: number[];
@@ -482,7 +483,7 @@ export class BudgetService {
       const { note, ticket } = splitLegacyTicketNote(data.note, data.ticket_json);
 
       const result = this.db.run(
-        'INSERT INTO budget_items (trip_id, category, name, total_price, currency, exchange_rate, persons, days, note, ticket_json, sort_order, expense_date, reservation_id, place_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+        'INSERT INTO budget_items (trip_id, category, name, total_price, currency, exchange_rate, persons, days, note, ticket_json, sort_order, expense_date, reservation_id, place_id, cost_status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
         tripId,
         cat,
         data.name,
@@ -497,6 +498,7 @@ export class BudgetService {
         data.expense_date || null,
         data.reservation_id != null ? data.reservation_id : null,
         data.place_id != null ? data.place_id : null,
+        data.cost_status || 'final',
       );
 
       const itemId = result.lastInsertRowid as number;
@@ -558,6 +560,7 @@ export class BudgetService {
       members?: { user_id: number; amount?: number | null }[];
       persons?: number | null; days?: number | null; note?: string | null; sort_order?: number; expense_date?: string | null;
       ticket_json?: string | null;
+      cost_status?: CostStatus;
       receipt_file_ids?: number[];
     },
   ) {
@@ -583,7 +586,8 @@ export class BudgetService {
       note = CASE WHEN ? THEN ? ELSE note END,
       ticket_json = CASE WHEN ? THEN ? ELSE ticket_json END,
       sort_order = CASE WHEN ? IS NOT NULL THEN ? ELSE sort_order END,
-      expense_date = CASE WHEN ? THEN ? ELSE expense_date END
+      expense_date = CASE WHEN ? THEN ? ELSE expense_date END,
+      cost_status = COALESCE(?, cost_status)
     WHERE id = ?
   `,
         data.category || null,
@@ -597,6 +601,7 @@ export class BudgetService {
         ticketTouched ? 1 : 0, ticketTouched ? ticket : null,
         data.sort_order !== undefined ? 1 : null, data.sort_order !== undefined ? data.sort_order : 0,
         data.expense_date !== undefined ? 1 : 0, data.expense_date !== undefined ? (data.expense_date || null) : null,
+        data.cost_status ?? null,
         id,
       );
 
@@ -823,7 +828,7 @@ export class BudgetService {
     FROM budget_item_members bm
     JOIN budget_items bi ON bm.budget_item_id = bi.id
     JOIN users u ON bm.user_id = u.id
-    WHERE bi.trip_id = ?
+    WHERE bi.trip_id = ? AND bi.cost_status = 'final'
     GROUP BY bm.user_id
   `, tripId);
 
@@ -975,7 +980,21 @@ export class BudgetService {
     const frontedRows: Record<number, { item_id: number; cents: number }[]> = {};
     const movedRows: Record<number, { settlement_id: number; from_user_id: number; to_user_id: number; cents: number }[]> = {};
 
+    // The trip's cost by status, in the same trip cents the ledger uses. Every
+    // expense counts here, split or not, paid or not: this is what the trip
+    // costs, not who owes whom.
+    let finalCents = 0;
+    let estimatedCents = 0;
+
     for (const item of items) {
+      const itemCents = toTripCents(item.total_price || 0, item.currency, item.exchange_rate);
+      // An estimate is a planned cost, not money anyone has spent, so it never
+      // enters the ledger: no credit for its payer, no debit for its members.
+      // Skipping the whole item (rather than one side of it) is what keeps
+      // Σ(balances) at exactly 0.
+      if (item.cost_status === 'estimate') { estimatedCents += itemCents; continue; }
+      finalCents += itemCents;
+
       const members = allMembers.filter(m => m.budget_item_id === item.id);
       const payers = allPayers.filter(p => p.budget_item_id === item.id);
       if (members.length === 0) continue; // planning-only entry → doesn't affect balances
@@ -1069,6 +1088,14 @@ export class BudgetService {
     // currency the viewer picked.
     const frontedDisplayCents = allocateDisplayCents(ledger.map(b => frontedCents[b.user_id] || 0), displayFactor);
     const reimbursedDisplayCents = allocateDisplayCents(ledger.map(b => reimbursedCents[b.user_id] || 0), displayFactor);
+    // Converted as one set as well, so planned = final + estimated holds to the
+    // cent in the display currency and not only in the trip currency.
+    const [finalDisplayCents, estimatedDisplayCents] = allocateDisplayCents([finalCents, estimatedCents], displayFactor);
+    const totals = {
+      final: finalDisplayCents / 100,
+      estimated: estimatedDisplayCents / 100,
+      planned: (finalDisplayCents + estimatedDisplayCents) / 100,
+    } satisfies BudgetCostTotals;
 
     // Calculate optimized payment flows (greedy algorithm)
     const people = ledger
@@ -1104,6 +1131,7 @@ export class BudgetService {
       })),
       flows,
       settlements,
+      totals,
       finalBudgets: ledger.map((b, i) => {
         // The rows behind each figure, converted against the figure itself: the
         // same largest-remainder split, with the cents already allocated to the

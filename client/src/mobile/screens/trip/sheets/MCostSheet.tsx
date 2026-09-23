@@ -15,13 +15,14 @@ import { saveWithReceipts } from '../../../../components/Budget/receiptUploads'
 import { SYMBOLS, SPLIT_COLORS, currenciesWith } from '../../../../components/Budget/BudgetPanel.constants'
 import { COST_CATEGORY_LIST, catMeta } from '../../../../components/Budget/costsCategories'
 import { localToday } from '../../../../components/Planner/today'
-import { amountPattern, calculateTicketShares, hasTicketSplit, NOTE_MAX, readTicketItems, readUserNote, splitEqualShares, writeTicketItems, type TicketItem } from '../../../../components/Budget/CostsPanel.helpers'
+import { amountPattern, calculateTicketShares, costStatusHintKey, hasTicketSplit, NOTE_MAX, readTicketItems, readUserNote, splitEqualShares, writeTicketItems, type TicketItem } from '../../../../components/Budget/CostsPanel.helpers'
 import type { ExpensePrefill } from '../../../../components/Budget/CostsPanel'
 import { payersBalanced, rebalancePayers } from '../../../../components/Budget/CostsPanel.helpers'
 import GuestBadge from '../../../../components/shared/GuestBadge'
 import type { TripMember } from '../../../../components/Budget/BudgetPanelMemberChips'
 import { ReceiptPreviewModal } from '../../../../components/Budget/ReceiptPreviewModal'
 import type { BudgetItem, BudgetItemReceipt } from '../../../../types'
+import { COST_STATUSES, type CostStatus } from '@trek/shared'
 
 export interface MCostSheetProps {
   tripId: number
@@ -75,6 +76,7 @@ export default function MCostSheet({ tripId, base, people, me, editing, prefill,
   const [cat, setCat] = useState<string>(editing ? catMeta(editing.category).key : (prefill?.category || 'food'))
   const [catOpen, setCatOpen] = useState(false)
   const [note, setNote] = useState(() => readUserNote(editing))
+  const [costStatus, setCostStatus] = useState<CostStatus>(editing?.cost_status ?? 'final')
   const [currency, setCurrency] = useState((editing?.currency || base).toUpperCase())
   const [day, setDay] = useState(editing?.expense_date || localToday())
   // Edit and prefill seeds are padded to the currency's decimals (#2175), same
@@ -285,6 +287,7 @@ export default function MCostSheet({ tripId, base, people, me, editing, prefill,
       member_ids: [...participants],
       expense_date: day || null,
       total_price: totalNum,
+      cost_status: costStatus,
       note: note.trim() || null,
       ticket_json: splitMode === 'ticket' ? writeTicketItems(ticketItems) : null,
       ...(!editing && prefill?.reservationId ? { reservation_id: prefill.reservationId } : {}),
@@ -368,6 +371,24 @@ export default function MCostSheet({ tripId, base, people, me, editing, prefill,
           placeholder={t('costs.namePlaceholder')}
           className={FIELD_CLS}
         />
+
+        {/* ESTIMATE / FINAL — an estimate is a planned cost and stays out of the settlement */}
+        <Eyebrow className="mb-[5px] mt-3 uppercase">{t('costs.status')}</Eyebrow>
+        <div role="radiogroup" aria-label={t('costs.status')} className="flex gap-1 rounded-full border border-[color:var(--m-rowbr)] bg-[color:var(--m-ic)] p-[3px]">
+          {COST_STATUSES.map(s => (
+            <button
+              key={s}
+              type="button"
+              role="radio"
+              aria-checked={costStatus === s}
+              onClick={() => setCostStatus(s)}
+              className={`flex-1 rounded-full py-[7px] text-[0.71875rem] font-semibold ${costStatus === s ? 'bg-m-act text-m-actfg' : 'text-m-muted'}`}
+            >
+              {t('costs.status.' + s)}
+            </button>
+          ))}
+        </div>
+        <p className="mt-[5px] text-[0.65625rem] text-m-faint">{t(costStatusHintKey(editing, costStatus))}</p>
 
         {/* TOTAL AMOUNT */}
         <Eyebrow className="mb-[5px] mt-3 uppercase">{t('costs.totalAmount')}</Eyebrow>

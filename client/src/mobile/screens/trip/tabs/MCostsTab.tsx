@@ -14,7 +14,7 @@ import { downloadBlob, openFile } from '../../../../utils/fileDownload'
 import { budgetApi } from '../../../../api/client'
 import MCostSheet from '../sheets/MCostSheet'
 import { ReceiptPreviewModal } from '../../../../components/Budget/ReceiptPreviewModal'
-import { finalBudgetFor, finalBudgetSources, readUserNote, settlementDate } from '../../../../components/Budget/CostsPanel.helpers'
+import { costStatusTotals, finalBudgetFor, finalBudgetSources, isEstimate, readUserNote, settlementDate } from '../../../../components/Budget/CostsPanel.helpers'
 import { catMeta, COST_CAT_META } from '../../../../components/Budget/costsCategories'
 import CustomSelect from '../../../../components/shared/CustomSelect'
 import { CustomDatePicker } from '../../../../components/shared/CustomDateTimePicker'
@@ -199,6 +199,11 @@ export default function MCostsTab({ planner, shell }: MTabScreenProps) {
           <span>{t('costs.yourShare')} · <b style={{ color: '#F5F5F7' }}>{formatMoney(totals.myShare, base, locale)}</b></span>
           <span>{t('costs.youPaid')} · <b style={{ color: '#F5F5F7' }}>{formatMoney(totals.myPaid, base, locale)}</b></span>
         </div>
+        {/* The big number is the final spend; estimates are planned on top of it. */}
+        {totals.estimateCount > 0 && <div data-testid="cost-status-totals" className="mt-1 flex flex-wrap gap-[14px] text-[0.6875rem]" style={{ color: 'rgba(245,245,247,.7)' }}>
+          <span>{t('costs.totalEstimated')} · <b style={{ color: '#F5F5F7' }}>{formatMoney(totals.estimated, base, locale)}</b></span>
+          <span>{t('costs.totalPlanned')} · <b style={{ color: '#F5F5F7' }}>{formatMoney(totals.planned, base, locale)}</b></span>
+        </div>}
       </div>
 
       {/* You owe / You're owed (spec §3.2) */}
@@ -489,7 +494,8 @@ export default function MCostsTab({ planner, shell }: MTabScreenProps) {
 
       {/* Expense groups (spec §3.7) — expenses and recorded settle-up payments, day-merged */}
       {groups.map(g => {
-        const groupTotal = g.entries.reduce((a, en) => en.kind === 'expense' ? a + baseTotal(en.item, ctx) : a, 0)
+        // "Spent" is the day's final expenses; an estimate is listed but not summed.
+        const groupTotal = costStatusTotals(g.entries.flatMap(en => en.kind === 'expense' ? [en.item] : []), e => baseTotal(e, ctx)).final
         return (
           <div key={g.dateKey || 'no-date'}>
             <div className="mt-[14px] flex items-baseline gap-2 px-[2px]">
@@ -625,6 +631,7 @@ function ExpenseRow({ item, ctx, base, locale, t, canEdit, onEdit, onDelete, onT
   const cur = currencyOf(item, ctx)
   const total = baseTotal(item, ctx)
   const unfinished = isUnfinished(item, ctx)
+  const estimate = isEstimate(item)
   const borderColor = tint(meta.color, 0.55)
   const members = item.members || []
   const note = readUserNote(item)
@@ -655,6 +662,11 @@ function ExpenseRow({ item, ctx, base, locale, t, canEdit, onEdit, onDelete, onT
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-1.5 min-w-0">
               <span className="truncate text-[0.8125rem] font-bold text-m-ink">{item.name}</span>
+              {estimate && (
+                <span data-testid="estimate-chip" title={t('costs.status.hint')} className="flex-none rounded-full border border-dashed border-[color:var(--m-rowbr)] px-[6px] py-[1px] font-geist text-[0.5625rem] font-bold text-m-muted">
+                  {t('costs.status.estimateShort')}
+                </span>
+              )}
               {(item.receipts || []).length > 0 && (
                 <button
                   type="button"
@@ -697,7 +709,7 @@ function ExpenseRow({ item, ctx, base, locale, t, canEdit, onEdit, onDelete, onT
               </div>
             )}
           </div>
-          <span className="flex-none rounded-full bg-[color:var(--m-ic)] px-[11px] py-1 font-geist text-[0.75rem] font-extrabold tabular-nums text-m-ink">
+          <span className={`flex-none rounded-full bg-[color:var(--m-ic)] px-[11px] py-1 font-geist text-[0.75rem] font-extrabold tabular-nums ${estimate ? 'text-m-muted opacity-75' : 'text-m-ink'}`}>
             {formatMoney(total, base, locale)}
           </span>
         </div>

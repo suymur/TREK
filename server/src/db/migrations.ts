@@ -5226,6 +5226,22 @@ function runMigrations(db: Database.Database): void {
       const seated = reseatBookedNights(db);
       if (seated > 0) console.log(`[DB] Seated ${seated} booked night(s) at the head of their day`);
     },
+
+    /*
+     * An expense is either an estimate (a planned cost) or final (the real
+     * cost). Estimates count toward the planned total but never enter the
+     * settlement. Every row that exists today is a real cost, so the default
+     * makes it `final` and nothing changes for it. The CHECK refuses any other
+     * value at the storage layer too, not only in the zod contract.
+     */
+    () => {
+      const hasColumn = db
+        .prepare("SELECT 1 FROM pragma_table_info('budget_items') WHERE name = 'cost_status'")
+        .get();
+      if (!hasColumn) {
+        db.exec("ALTER TABLE budget_items ADD COLUMN cost_status TEXT NOT NULL DEFAULT 'final' CHECK (cost_status IN ('estimate', 'final'))");
+      }
+    },
   ];
 
   if (currentVersion < migrations.length) {

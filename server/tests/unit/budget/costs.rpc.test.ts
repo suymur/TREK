@@ -145,6 +145,16 @@ describe('CostsRpc writes', () => {
     expect(off.realtime.broadcast).not.toHaveBeenCalled();
   });
 
+  it('COSTS-RPC-013 cost_status travels through create and update, and a bad value is refused', async () => {
+    const f = build();
+    expect((await f.host().dispatch(req('costs.create', { tripId: 1, input: { name: 'Hotel', cost_status: 'estimate' } }), 42)).ok).toBe(true);
+    expect(f.budget.create).toHaveBeenCalledWith('1', expect.objectContaining({ cost_status: 'estimate' }));
+    expect((await f.host().dispatch(req('costs.update', { tripId: 1, itemId: 5, input: { cost_status: 'final' } }), 42)).ok).toBe(true);
+    expect(f.budget.update).toHaveBeenCalledWith('5', '1', expect.objectContaining({ cost_status: 'final' }));
+    const bad = await f.host().dispatch(req('costs.create', { tripId: 1, input: { name: 'x', cost_status: 'maybe' } }), 42);
+    expect((bad as RpcError).error.message).toMatch(/^invalid cost:/);
+  });
+
   it('COSTS-RPC-012 the class is listed in its module providers', () => {
     expectRegisteredProvider(BudgetModule, CostsRpc);
   });
