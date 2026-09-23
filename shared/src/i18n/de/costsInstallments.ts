@@ -1,10 +1,10 @@
 import type { TranslationStrings } from '../types';
 
 const costsInstallments: TranslationStrings = {
-  'installments.title': 'Teilzahlungen',
+  'installments.title': 'Anzahlungen',
   'installments.hint':
     'Zahlung zeitlich aufteilen, z. B. jetzt eine Anzahlung und später die Restzahlung. Wer wem etwas schuldet, ändert sich dadurch nicht.',
-  'installments.add': 'Teilzahlung hinzufügen',
+  'installments.add': 'Anzahlung hinzufügen',
   'installments.label': 'Bezeichnung',
   'installments.labelPlaceholder': 'Anzahlung',
   'installments.amount': 'Betrag',
@@ -16,6 +16,10 @@ const costsInstallments: TranslationStrings = {
   'installments.paidOf': '{paid} von {total} bezahlt',
   'installments.nextDue': 'Nächste Fälligkeit {date}',
   'installments.unscheduled': '{amount} noch nicht eingeplant',
+  'installments.unassigned': 'Nicht zugeordnet',
+  'installments.remainder': 'Restbetrag',
+  'installments.splitInvalid':
+    'Die Anteile müssen jede Anzahlung ergeben und dürfen den Kostenanteil einer Person nicht überschreiten.',
   'installments.overTotal': 'Die Teilzahlungen ergeben {sum}, mehr als der Gesamtbetrag von {total}.',
   'installments.markPaidFailed': 'Die Zahlung konnte nicht aktualisiert werden.',
   'installments.openAmount': '{amount} offen',

@@ -15,6 +15,10 @@ const costsInstallments: TranslationStrings = {
   'installments.paidOf': 'Zaplaceno {paid} z {total}',
   'installments.nextDue': 'Další splatnost {date}',
   'installments.unscheduled': '{amount} zatím nenaplánováno',
+  'installments.unassigned': 'Unassigned',
+  'installments.remainder': 'Remaining amount',
+  'installments.splitInvalid':
+    'Deposit shares must add up to each deposit and stay within each person’s expense share.',
   'installments.overTotal': 'Splátky dávají dohromady {sum}, více než celková částka {total}.',
   'installments.markPaidFailed': 'Platbu se nepodařilo aktualizovat.',
   'installments.openAmount': '{amount} otevřeno',

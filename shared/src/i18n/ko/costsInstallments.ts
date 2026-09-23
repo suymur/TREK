@@ -16,6 +16,10 @@ const costsInstallments: TranslationStrings = {
   'installments.paidOf': '{total} 중 {paid} 결제됨',
   'installments.nextDue': '다음 기한 {date}',
   'installments.unscheduled': '{amount} 아직 일정 없음',
+  'installments.unassigned': 'Unassigned',
+  'installments.remainder': 'Remaining amount',
+  'installments.splitInvalid':
+    'Deposit shares must add up to each deposit and stay within each person’s expense share.',
   'installments.overTotal': '분할 결제 합계 {sum}이(가) 총액 {total}보다 많습니다.',
   'installments.markPaidFailed': '결제를 업데이트하지 못했습니다.',
   'installments.openAmount': '{amount} 미결제',

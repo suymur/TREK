@@ -1409,8 +1409,16 @@ export function ExpenseModal({ tripId, base, people, me, editing, prefill, onClo
   const ticketValid = ticketItems.length > 0 && ticketItems.every(item => item.name.trim().length > 0 && (Number.parseFloat(item.price) || 0) > 0 && item.participants.size > 0)
   const payersOk = !multiPayer || (payerIds.size > 0 && payersBalanced(payerAmounts, payerIds, totalNum))
   // A negative total is a valid entry (a refund, #2176); only zero has nothing to say.
-  const installments = useInstallmentDrafts(editing, totalNum)
-  const valid = !installments.exceeds && name.trim().length > 0 && payersOk && (
+  const fullShares = useMemo(() => {
+    const ids = splitMode === 'ticket'
+      ? [...new Set([...participants, ...Object.keys(ticketInfo.shares).map(Number)])]
+      : [...participants]
+    return Object.fromEntries(ids.map(id => [id, splitMode === 'custom'
+      ? (Number.parseFloat(customAmounts[id]) || 0)
+      : splitMode === 'ticket' ? (ticketInfo.shares[id] || 0) : (equalShares[id] || 0)]))
+  }, [splitMode, participants, ticketInfo.shares, customAmounts, equalShares])
+  const installments = useInstallmentDrafts(editing, totalNum, fullShares)
+  const valid = !installments.exceeds && !installments.invalidSplit && name.trim().length > 0 && payersOk && (
     isTicketMode
       ? ticketValid
       : totalNum !== 0 && (participants.size === 0 || splitMode === 'equally' || customBalanced)
@@ -1683,8 +1691,6 @@ export function ExpenseModal({ tripId, base, people, me, editing, prefill, onClo
           </div>
         </div>
 
-        <CostInstallmentsSection state={installments} currency={currency} total={totalNum} panelCls={panelCls} labelCls={labelCls} />
-
         </div>
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: 14, minWidth: 0 }}>
@@ -1905,6 +1911,7 @@ export function ExpenseModal({ tripId, base, people, me, editing, prefill, onClo
               </div>
             </>
           )}
+          <CostInstallmentsSection state={installments} currency={currency} total={totalNum} people={people.map(p => ({ id: p.id, name: p.id === me ? t('costs.you') : p.username }))} fullShares={fullShares} labelCls={labelCls} />
         </div>
 
         <div className={panelCls}>

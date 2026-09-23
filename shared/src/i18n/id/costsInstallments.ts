@@ -16,6 +16,10 @@ const costsInstallments: TranslationStrings = {
   'installments.paidOf': 'Terbayar {paid} dari {total}',
   'installments.nextDue': 'Jatuh tempo berikutnya {date}',
   'installments.unscheduled': '{amount} belum dijadwalkan',
+  'installments.unassigned': 'Unassigned',
+  'installments.remainder': 'Remaining amount',
+  'installments.splitInvalid':
+    'Deposit shares must add up to each deposit and stay within each person’s expense share.',
   'installments.overTotal': 'Total cicilan {sum}, lebih dari total {total}.',
   'installments.markPaidFailed': 'Pembayaran tidak dapat diperbarui.',
   'installments.openAmount': '{amount} belum dibayar',

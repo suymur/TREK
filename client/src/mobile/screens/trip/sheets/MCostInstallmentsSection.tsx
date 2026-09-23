@@ -6,6 +6,8 @@ import { CustomDatePicker } from '../../../../components/shared/CustomDateTimePi
 import { NumericInput } from '../../../../components/shared/NumericInput'
 import { InstallmentSummaryLine } from '../../../../components/Budget/InstallmentsChip'
 import type { InstallmentDraftsState } from '../../../../components/Budget/useInstallmentDrafts'
+import { DepositRemainder, DepositSharesEditor, type DepositPerson } from '../../../../components/Budget/DepositSharesEditor'
+import type { ExpenseShares } from '../../../../utils/budgetInstallments'
 import { Eyebrow, FIELD_CLS } from './PlSheetChrome'
 
 /**
@@ -13,16 +15,18 @@ import { Eyebrow, FIELD_CLS } from './PlSheetChrome'
  * the rows live in useInstallmentDrafts, shared with the desktop dialog, and are
  * saved with the expense.
  */
-export default function MCostInstallmentsSection({ state, currency, total }: {
+export default function MCostInstallmentsSection({ state, currency, total, people, fullShares }: {
   state: InstallmentDraftsState
   currency: string
   total: number
+  people: DepositPerson[]
+  fullShares: ExpenseShares
 }) {
   const { t, locale } = useTranslation()
   const { drafts, add, remove, update, togglePaid, exceeds, summary, sum } = state
 
   return (
-    <div data-testid="m-installments-section">
+    <div data-testid="m-installments-section" className="mt-4 border-t border-[color:var(--m-rowbr)] pt-2">
       <div className="mb-[6px] mt-4 flex items-center justify-between">
         <Eyebrow className="uppercase">{t('installments.title')}</Eyebrow>
         <button type="button" onClick={add} className="flex items-center gap-1 text-[0.75rem] font-semibold text-m-ink">
@@ -33,7 +37,7 @@ export default function MCostInstallmentsSection({ state, currency, total }: {
       <div className="flex flex-col gap-2">
         {drafts.map(d => (
           <div key={d.key} data-testid="m-installment-row"
-            className={`rounded-xl border border-[color:var(--m-rowbr)] bg-m-card p-[10px] ${d.paid_at ? 'opacity-75' : ''}`}>
+            className="rounded-xl border border-[color:var(--m-rowbr)] bg-m-card p-[10px]">
             <div className="flex items-center gap-2">
               <input value={d.label} maxLength={INSTALLMENT_LABEL_MAX} onChange={e => update(d.key, { label: e.target.value })}
                 placeholder={t('installments.labelPlaceholder')} aria-label={t('installments.label')}
@@ -43,7 +47,7 @@ export default function MCostInstallmentsSection({ state, currency, total }: {
               </button>
             </div>
             <div className="mt-2 flex items-center gap-2">
-              <NumericInput mode="decimal" value={localizeAmountInput(d.amount, currency)} onValueChange={v => update(d.key, { amount: v })}
+              <NumericInput mode="decimal" value={localizeAmountInput(d.amount, currency)} onValueChange={v => update(d.key, { amount: v })} data-testid="installment-amount"
                 placeholder={localizeAmountInput('0.00', currency)} aria-label={t('installments.amount')}
                 className={`${FIELD_CLS} w-[96px] flex-none text-right`} />
               <div className="min-w-0 flex-1">
@@ -55,15 +59,18 @@ export default function MCostInstallmentsSection({ state, currency, total }: {
                 <Check size={12} strokeWidth={2.4} /> {t('installments.paid')}
               </button>
             </div>
+            <DepositSharesEditor state={state} draftKey={d.key} people={people.filter(person => person.id in fullShares)} currency={currency} mobile />
           </div>
         ))}
       </div>
       {summary && <InstallmentSummaryLine summary={summary} currency={currency} style={{ marginTop: 8 }} />}
+      {drafts.length > 0 && <DepositRemainder state={state} people={people} fullShares={fullShares} total={total} currency={currency} mobile />}
       {exceeds && (
         <p role="alert" className="mt-[5px] text-[0.6875rem] text-danger">
           {t('installments.overTotal', { sum: formatMoney(sum, currency, locale), total: formatMoney(total, currency, locale) })}
         </p>
       )}
+      {state.invalidSplit && drafts.length > 0 && <p role="alert" className="mt-2 text-[0.75rem] text-danger">{t('installments.splitInvalid')}</p>}
     </div>
   )
 }

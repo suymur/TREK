@@ -16,6 +16,10 @@ const costsInstallments: TranslationStrings = {
   'installments.paidOf': 'Πληρώθηκαν {paid} από {total}',
   'installments.nextDue': 'Επόμενη λήξη {date}',
   'installments.unscheduled': '{amount} δεν έχει προγραμματιστεί ακόμη',
+  'installments.unassigned': 'Unassigned',
+  'installments.remainder': 'Remaining amount',
+  'installments.splitInvalid':
+    'Deposit shares must add up to each deposit and stay within each person’s expense share.',
   'installments.overTotal': 'Οι δόσεις αθροίζουν {sum}, περισσότερο από το σύνολο {total}.',
   'installments.markPaidFailed': 'Δεν ήταν δυνατή η ενημέρωση της πληρωμής.',
   'installments.openAmount': '{amount} ανοιχτά',

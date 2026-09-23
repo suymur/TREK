@@ -1,10 +1,10 @@
 import type { TranslationStrings } from '../types';
 
 const costsInstallments: TranslationStrings = {
-  'installments.title': 'Installments',
+  'installments.title': 'Deposits',
   'installments.hint':
     'Split the payment over time, e.g. a deposit now and the remainder later. Who owes whom does not change.',
-  'installments.add': 'Add installment',
+  'installments.add': 'Add deposit',
   'installments.label': 'Label',
   'installments.labelPlaceholder': 'Deposit',
   'installments.amount': 'Amount',
@@ -16,6 +16,10 @@ const costsInstallments: TranslationStrings = {
   'installments.paidOf': 'Paid {paid} of {total}',
   'installments.nextDue': 'Next due {date}',
   'installments.unscheduled': '{amount} not scheduled yet',
+  'installments.unassigned': 'Unassigned',
+  'installments.remainder': 'Remaining amount',
+  'installments.splitInvalid':
+    'Deposit shares must add up to each deposit and stay within each person’s expense share.',
   'installments.overTotal': 'The installments add up to {sum}, more than the total of {total}.',
   'installments.markPaidFailed': 'The payment could not be updated.',
   'installments.openAmount': '{amount} open',

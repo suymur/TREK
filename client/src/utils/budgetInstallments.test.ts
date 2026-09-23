@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { BudgetItem, BudgetItemInstallment } from '@trek/shared'
-import { duePayments, draftsExceedTotal, draftsToInput, installmentSummary, withInstallmentPaid } from './budgetInstallments'
+import { depositSplitState, duePayments, draftsExceedTotal, draftsToInput, installmentSummary, withInstallmentPaid } from './budgetInstallments'
 
 const installment = (id: number, amount: number, due_date: string | null, paid_at: string | null = null): BudgetItemInstallment => ({
   id, budget_item_id: 1, label: `Payment ${id}`, amount, due_date, paid_at, sort_order: id, members: [],
@@ -44,5 +44,40 @@ describe('expense installments', () => {
       { id: 1, label: 'Deposit', amount: 0.1, due_date: null, paid_at: '2026-09-23' },
       { label: 'Remainder', amount: 0.2, due_date: '2026-10-01', paid_at: null },
     ])
+  })
+
+  it('splits each deposit independently and computes each person’s remaining amount', () => {
+    const drafts = [
+      { key: 'a', label: 'Deposit 1', amount: '200', due_date: null, paid_at: '2026-09-23', members: {}, manualMembers: false },
+      { key: 'b', label: 'Deposit 2', amount: '100', due_date: null, paid_at: null, members: { 1: '0', 2: '100' }, manualMembers: true },
+    ]
+    const shares = { 1: 419.65, 2: 419.65 }
+    const split = depositSplitState(drafts, shares)
+    expect(split.valid).toBe(true)
+    expect(split.allocations).toEqual({ a: { 1: 100, 2: 100 }, b: { 1: 0, 2: 100 } })
+    expect(split.remainder).toEqual({ 1: 319.65, 2: 219.65 })
+    expect(draftsToInput(drafts, shares).map(row => row.members)).toEqual([
+      [{ user_id: 1, amount: 100 }, { user_id: 2, amount: 100 }],
+      [{ user_id: 2, amount: 100 }],
+    ])
+    expect(depositSplitState([{ ...drafts[1]!, members: { 1: '0', 2: '500' } }], shares).valid).toBe(false)
+  })
+
+  it('reserves manual shares before automatically splitting earlier deposits', () => {
+    const drafts = [
+      { key: 'auto', label: 'First', amount: '60', due_date: null, paid_at: null, members: {}, manualMembers: false },
+      { key: 'manual', label: 'Second', amount: '40', due_date: null, paid_at: null, members: { 1: '40', 2: '0' }, manualMembers: true },
+    ]
+    const split = depositSplitState(drafts, { 1: 50, 2: 50 })
+    expect(split.valid).toBe(true)
+    expect(split.allocations.auto).toEqual({ 1: 10, 2: 50 })
+    expect(split.remainder).toEqual({ 1: 0, 2: 0 })
+    expect(depositSplitState(drafts, {}).valid).toBe(false)
+  })
+
+  it('keeps planning-only deposits unallocated', () => {
+    const draft = { key: 'planning', label: 'Deposit', amount: '30', due_date: null, paid_at: null, members: {}, manualMembers: false }
+    expect(depositSplitState([draft], {}).valid).toBe(true)
+    expect(draftsToInput([draft], {})[0]?.members).toEqual([])
   })
 })

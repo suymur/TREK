@@ -16,6 +16,10 @@ const costsInstallments: TranslationStrings = {
   'installments.paidOf': 'Đã trả {paid} trên {total}',
   'installments.nextDue': 'Hạn tiếp theo {date}',
   'installments.unscheduled': '{amount} chưa lên lịch',
+  'installments.unassigned': 'Unassigned',
+  'installments.remainder': 'Remaining amount',
+  'installments.splitInvalid':
+    'Deposit shares must add up to each deposit and stay within each person’s expense share.',
   'installments.overTotal': 'Tổng các đợt là {sum}, nhiều hơn tổng {total}.',
   'installments.markPaidFailed': 'Không thể cập nhật khoản thanh toán.',
   'installments.openAmount': 'Còn {amount}',

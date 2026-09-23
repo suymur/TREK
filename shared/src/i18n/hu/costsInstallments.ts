@@ -16,6 +16,10 @@ const costsInstallments: TranslationStrings = {
   'installments.paidOf': '{total} összegből {paid} fizetve',
   'installments.nextDue': 'Következő esedékesség: {date}',
   'installments.unscheduled': '{amount} még nincs beütemezve',
+  'installments.unassigned': 'Unassigned',
+  'installments.remainder': 'Remaining amount',
+  'installments.splitInvalid':
+    'Deposit shares must add up to each deposit and stay within each person’s expense share.',
   'installments.overTotal': 'A részletek összege {sum}, több mint a {total} végösszeg.',
   'installments.markPaidFailed': 'A fizetést nem sikerült frissíteni.',
   'installments.openAmount': '{amount} nyitott',

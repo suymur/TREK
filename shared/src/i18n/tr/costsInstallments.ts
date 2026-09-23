@@ -15,6 +15,10 @@ const costsInstallments: TranslationStrings = {
   'installments.paidOf': '{total} tutarın {paid} kadarı ödendi',
   'installments.nextDue': 'Sonraki vade {date}',
   'installments.unscheduled': '{amount} henüz planlanmadı',
+  'installments.unassigned': 'Unassigned',
+  'installments.remainder': 'Remaining amount',
+  'installments.splitInvalid':
+    'Deposit shares must add up to each deposit and stay within each person’s expense share.',
   'installments.overTotal': 'Taksitlerin toplamı {sum}, toplam tutar olan {total} değerinden fazla.',
   'installments.markPaidFailed': 'Ödeme güncellenemedi.',
   'installments.openAmount': '{amount} açık',

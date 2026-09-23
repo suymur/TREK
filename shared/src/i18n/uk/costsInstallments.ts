@@ -16,6 +16,10 @@ const costsInstallments: TranslationStrings = {
   'installments.paidOf': 'Оплачено {paid} з {total}',
   'installments.nextDue': 'Наступний термін {date}',
   'installments.unscheduled': '{amount} ще не заплановано',
+  'installments.unassigned': 'Unassigned',
+  'installments.remainder': 'Remaining amount',
+  'installments.splitInvalid':
+    'Deposit shares must add up to each deposit and stay within each person’s expense share.',
   'installments.overTotal': 'Сума платежів {sum} більша за загальну суму {total}.',
   'installments.markPaidFailed': 'Не вдалося оновити платіж.',
   'installments.openAmount': 'Не оплачено {amount}',

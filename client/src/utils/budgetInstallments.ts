@@ -19,7 +19,14 @@ export interface InstallmentDraft {
   amount: string
   due_date: string | null
   paid_at: string | null
+  /** Explicit per-person deposit shares; new rows begin with an automatic split. */
+  members?: Record<number, string>
+  manualMembers?: boolean
 }
+
+export type ExpenseShares = Record<number, number>
+export type DepositShares = Record<number, number>
+export type DepositInput = BudgetInstallmentInput & { members?: { user_id: number; amount: number }[] }
 
 let draftCounter = 0
 const newKey = () => `new-${++draftCounter}`
@@ -32,11 +39,14 @@ export function draftsFromItem(item: Pick<BudgetItem, 'installments'> | null | u
     amount: String(i.amount),
     due_date: i.due_date,
     paid_at: i.paid_at,
+    members: Object.fromEntries(((i as BudgetItemInstallment & { members?: { user_id: number; amount: number }[] }).members || [])
+      .map(member => [member.user_id, String(member.amount)])),
+    manualMembers: !!(i as BudgetItemInstallment & { members?: { user_id: number; amount: number }[] }).members?.length,
   }))
 }
 
 export function emptyDraft(): InstallmentDraft {
-  return { key: newKey(), label: '', amount: '', due_date: null, paid_at: null }
+  return { key: newKey(), label: '', amount: '', due_date: null, paid_at: null, members: {}, manualMembers: false }
 }
 
 /** The input text as a number; a comma decimal counts like a point. */
@@ -46,7 +56,8 @@ export function draftAmount(d: Pick<InstallmentDraft, 'amount'>): number {
 }
 
 /** Rows without a positive amount say nothing and are not sent. */
-export function draftsToInput(drafts: InstallmentDraft[]): BudgetInstallmentInput[] {
+export function draftsToInput(drafts: InstallmentDraft[], fullShares?: ExpenseShares): DepositInput[] {
+  const allocations = fullShares ? depositAllocations(drafts, fullShares) : null
   return drafts
     .filter(d => toCents(draftAmount(d)) > 0)
     .map(d => ({
@@ -55,7 +66,82 @@ export function draftsToInput(drafts: InstallmentDraft[]): BudgetInstallmentInpu
       amount: Math.round(draftAmount(d) * 100) / 100,
       due_date: d.due_date || null,
       paid_at: d.paid_at || null,
+      ...(allocations ? { members: Object.entries(allocations[d.key] || {})
+        .filter(([, amount]) => amount > 0)
+        .map(([user_id, amount]) => ({ user_id: Number(user_id), amount })) } : {}),
     }))
+}
+
+/** Allocate one deposit across the unused whole-cent shares, filling capped people evenly. */
+function automaticAllocation(amountCents: number, available: Map<number, number>): DepositShares {
+  const result = new Map<number, number>()
+  let left = amountCents
+  while (left > 0) {
+    const active = [...available].filter(([, cents]) => cents > 0)
+    if (active.length === 0) break
+    const each = Math.floor(left / active.length)
+    let extra = left % active.length
+    let assigned = 0
+    for (const [id, capacity] of active) {
+      const wanted = each + (extra > 0 ? 1 : 0)
+      if (extra > 0) extra--
+      const take = Math.min(capacity, wanted)
+      result.set(id, (result.get(id) ?? 0) + take)
+      available.set(id, capacity - take)
+      assigned += take
+    }
+    if (assigned === 0) break
+    left -= assigned
+  }
+  return Object.fromEntries([...result].map(([id, cents]) => [id, cents / 100]))
+}
+
+/** Per-deposit shares, with unedited deposits split automatically within each person's full expense share. */
+export function depositAllocations(drafts: InstallmentDraft[], fullShares: ExpenseShares): Record<string, DepositShares> {
+  const available = new Map(Object.entries(fullShares).map(([id, amount]) => [Number(id), Math.max(0, toCents(amount))]))
+  const allocations: Record<string, DepositShares> = {}
+  for (const draft of drafts) {
+    if (draft.manualMembers) {
+      const shares = Object.fromEntries(Object.entries(draft.members || {}).map(([id, amount]) => [Number(id), draftAmount({ amount })]))
+      allocations[draft.key] = shares
+      for (const [id, amount] of Object.entries(shares)) available.set(Number(id), (available.get(Number(id)) ?? 0) - toCents(amount))
+    }
+  }
+  for (const draft of drafts) {
+    if (!draft.manualMembers) allocations[draft.key] = automaticAllocation(Math.max(0, toCents(draftAmount(draft))), available)
+  }
+  return allocations
+}
+
+export function depositSplitState(drafts: InstallmentDraft[], fullShares: ExpenseShares): {
+  allocations: Record<string, DepositShares>
+  remainder: DepositShares
+  valid: boolean
+} {
+  const allocations = depositAllocations(drafts, fullShares)
+  if (!drafts.some(draft => toCents(draftAmount(draft)) > 0)) {
+    return { allocations, remainder: { ...fullShares }, valid: true }
+  }
+  const used = new Map<number, number>()
+  let valid = true
+  for (const draft of drafts) {
+    const amount = toCents(draftAmount(draft))
+    if (amount <= 0) continue
+    const shares = allocations[draft.key] || {}
+    const allocated = Object.entries(shares).reduce((sum, [id, value]) => {
+      const cents = toCents(value)
+      if (!(Number(id) in fullShares) || cents < 0) valid = false
+      used.set(Number(id), (used.get(Number(id)) ?? 0) + cents)
+      return sum + cents
+    }, 0)
+    if (Object.keys(fullShares).length > 0 && allocated !== amount) valid = false
+  }
+  const remainder = Object.fromEntries(Object.entries(fullShares).map(([id, amount]) => {
+    const cents = toCents(amount) - (used.get(Number(id)) ?? 0)
+    if (cents < 0) valid = false
+    return [Number(id), cents / 100]
+  }))
+  return { allocations, remainder, valid }
 }
 
 /** Sum of the drafts that would be sent, in whole cents. */

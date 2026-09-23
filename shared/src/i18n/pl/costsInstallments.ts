@@ -16,6 +16,10 @@ const costsInstallments: TranslationStrings = {
   'installments.paidOf': 'Zapłacono {paid} z {total}',
   'installments.nextDue': 'Następny termin {date}',
   'installments.unscheduled': '{amount} jeszcze nie zaplanowano',
+  'installments.unassigned': 'Unassigned',
+  'installments.remainder': 'Remaining amount',
+  'installments.splitInvalid':
+    'Deposit shares must add up to each deposit and stay within each person’s expense share.',
   'installments.overTotal': 'Raty sumują się do {sum}, więcej niż suma {total}.',
   'installments.markPaidFailed': 'Nie udało się zaktualizować płatności.',
   'installments.openAmount': '{amount} do zapłaty',
