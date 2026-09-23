@@ -125,6 +125,19 @@ const budget: TranslationStrings = {
   'costs.cat.fuel': 'Καύσιμα',
   'costs.cat.parking': 'Στάθμευση',
   'costs.cat.other': 'Άλλα',
+  'costs.customCat.new': 'Νέα κατηγορία',
+  'costs.customCat.edit': 'Επεξεργασία κατηγορίας',
+  'costs.customCat.name': 'Όνομα',
+  'costs.customCat.namePlaceholder': 'π.χ. Διακόσμηση',
+  'costs.customCat.icon': 'Εικονίδιο',
+  'costs.customCat.color': 'Χρώμα',
+  'costs.customCat.shared': 'Όλοι σε αυτόν τον διακομιστή βλέπουν και χρησιμοποιούν τις προσαρμοσμένες κατηγορίες.',
+  'costs.customCat.delete': 'Διαγραφή κατηγορίας',
+  'costs.customCat.deleteConfirm': 'Διαγραφή «{name}»; Τα έξοδά της μεταφέρονται στα Άλλα, σε όλα τα ταξίδια.',
+  'costs.customCat.deleted': 'Η κατηγορία διαγράφηκε. {count} έξοδα μεταφέρθηκαν στα Άλλα.',
+  'costs.customCat.duplicate': 'Υπάρχει ήδη κατηγορία με αυτό το όνομα.',
+  'costs.customCat.notAllowed': 'Μόνο ο δημιουργός ή ένας διαχειριστής μπορεί να αλλάξει αυτήν την κατηγορία.',
+  'costs.customCat.offline': 'Οι κατηγορίες αλλάζουν μόνο όταν είστε συνδεδεμένοι.',
   'costs.daysCount': '{count} ημέρες',
   'costs.travelers': '{count} ταξιδιώτες',
   'costs.liveRate': 'ζωντανή ισοτιμία',
@@ -166,6 +179,7 @@ const budget: TranslationStrings = {
   'costs.noReceipts': 'Δεν υπάρχουν συνημμένες αποδείξεις',
   'costs.deleteReceipt': 'Αφαίρεση απόδειξης',
   'costs.viewReceipt': 'Προβολή απόδειξης',
-  'costs.receiptLeftBehind': 'Η αποθήκευση απέτυχε και {count} ανεβασμένες αποδείξεις παραμένουν. Διαγράψτε τες στην καρτέλα Αρχεία.',
+  'costs.receiptLeftBehind':
+    'Η αποθήκευση απέτυχε και {count} ανεβασμένες αποδείξεις παραμένουν. Διαγράψτε τες στην καρτέλα Αρχεία.',
 };
 export default budget;

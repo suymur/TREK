@@ -124,6 +124,19 @@ const budget: TranslationStrings = {
   'costs.cat.fuel': 'Brandstof',
   'costs.cat.parking': 'Parkeren',
   'costs.cat.other': 'Overig',
+  'costs.customCat.new': 'Nieuwe categorie',
+  'costs.customCat.edit': 'Categorie bewerken',
+  'costs.customCat.name': 'Naam',
+  'costs.customCat.namePlaceholder': 'bijv. Decoratie',
+  'costs.customCat.icon': 'Pictogram',
+  'costs.customCat.color': 'Kleur',
+  'costs.customCat.shared': 'Iedereen op deze server ziet eigen categorieën en kan ze gebruiken.',
+  'costs.customCat.delete': 'Categorie verwijderen',
+  'costs.customCat.deleteConfirm': '"{name}" verwijderen? De uitgaven erin gaan in alle reizen naar Overig.',
+  'costs.customCat.deleted': 'Categorie verwijderd. {count} uitgaven staan nu onder Overig.',
+  'costs.customCat.duplicate': 'Er bestaat al een categorie met deze naam.',
+  'costs.customCat.notAllowed': 'Alleen de maker of een beheerder kan deze categorie wijzigen.',
+  'costs.customCat.offline': 'Categorieën kun je alleen online wijzigen.',
   'costs.daysCount': '{count} dagen',
   'costs.travelers': '{count} reizigers',
   'costs.liveRate': 'live koers',
@@ -165,6 +178,7 @@ const budget: TranslationStrings = {
   'costs.noReceipts': 'Geen bonnetjes bijgevoegd',
   'costs.deleteReceipt': 'Bonnetje verwijderen',
   'costs.viewReceipt': 'Bonnetje bekijken',
-  'costs.receiptLeftBehind': 'Opslaan mislukt en er staan nog {count} geüploade bonnen. Verwijder ze op het tabblad Bestanden.',
+  'costs.receiptLeftBehind':
+    'Opslaan mislukt en er staan nog {count} geüploade bonnen. Verwijder ze op het tabblad Bestanden.',
 };
 export default budget;

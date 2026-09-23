@@ -1,18 +1,35 @@
-import { Hotel, Utensils, ShoppingCart, Bus, Plane, Ticket, Camera, ShoppingBag, FileText, HeartPulse, Coins, MoreHorizontal, Fuel, ParkingCircle } from 'lucide-react'
+import {
+  Hotel, Utensils, ShoppingCart, Bus, Plane, Ticket, Camera, ShoppingBag, FileText, HeartPulse, Coins, MoreHorizontal, Fuel, ParkingCircle,
+  Tag, Briefcase, Landmark, UtensilsCrossed, Coffee, Wine, Shirt, Gift, Sparkles, Palette, Music, Dumbbell, Baby, Dog, Wrench, BookOpen, Home, Smartphone, Umbrella, Star,
+} from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
-import { COST_CATEGORIES, resolveCostCategory, type CostCategory } from '@trek/shared'
+import {
+  COST_CATEGORIES,
+  customCostCategoryKey,
+  resolveCostCategory,
+  type CostCategory,
+  type CostCategoryIcon,
+  type CostCategoryKey,
+  type CostCategoryRecord,
+} from '@trek/shared'
 
 /**
- * The fixed Costs categories. Users can't add their own — every expense maps to
- * one of these. Category colour is the one place an accent is allowed (it
- * visualises the category); everything else stays black/white. The label comes
- * from i18n (`costs.cat.*`).
+ * The Costs categories: the 14 fixed ones plus the custom categories every user
+ * of the instance shares (#4). Category colour is the one place an accent is
+ * allowed (it visualises the category); everything else stays black/white. A
+ * fixed category's label comes from i18n (`costs.cat.*`); a custom category
+ * carries the name its creator typed.
  */
 export interface CostCategoryMeta {
-  key: CostCategory
+  key: CostCategoryKey
+  /** i18n key of a fixed category; empty for a custom one (it has `label`). */
   labelKey: string
+  /** The typed name of a custom category. */
+  label?: string
   Icon: LucideIcon
   color: string
+  /** The stored row behind a custom category. */
+  custom?: CostCategoryRecord
 }
 
 export const COST_CAT_META: Record<CostCategory, CostCategoryMeta> = {
@@ -34,11 +51,84 @@ export const COST_CAT_META: Record<CostCategory, CostCategoryMeta> = {
 
 export const COST_CATEGORY_LIST: CostCategoryMeta[] = COST_CATEGORIES.map(k => COST_CAT_META[k])
 
+/** The lucide component behind each icon name a custom category may pick. */
+export const COST_CATEGORY_ICON_COMPONENTS: Record<CostCategoryIcon, LucideIcon> = {
+  tag: Tag,
+  briefcase: Briefcase,
+  landmark: Landmark,
+  'utensils-crossed': UtensilsCrossed,
+  coffee: Coffee,
+  wine: Wine,
+  shirt: Shirt,
+  gift: Gift,
+  sparkles: Sparkles,
+  palette: Palette,
+  music: Music,
+  dumbbell: Dumbbell,
+  baby: Baby,
+  dog: Dog,
+  wrench: Wrench,
+  'book-open': BookOpen,
+  home: Home,
+  smartphone: Smartphone,
+  umbrella: Umbrella,
+  star: Star,
+}
+
+/** The label of a category, fixed or custom. */
+export function categoryLabel(meta: CostCategoryMeta, t: (key: string) => string): string {
+  return meta.label ?? t(meta.labelKey)
+}
+
 /**
- * Map any stored category (incl. legacy/localized free-text values) to a known
- * meta. The key comes from the shared resolver the server groups the cost
- * overview by, so both screens put an expense in the same bucket.
+ * The one lookup every place that shows a category goes through (list, filter,
+ * summary, pie chart, CSV, overview): the fixed categories, then the custom
+ * ones in their sort order. Build it with buildCostCategoryIndex, or in a
+ * component with useCostCategoryIndex (useCostCategories.ts).
+ */
+export interface CostCategoryIndex {
+  /** Fixed categories first, then custom ones: the picker and breakdown order. */
+  list: CostCategoryMeta[]
+  /** Only the custom categories. */
+  custom: CostCategoryMeta[]
+  /** Any stored category (legacy free text and `custom:<id>` included) to its meta; unknown is `other`. */
+  meta: (category: string | null | undefined) => CostCategoryMeta
+  /** Shorthand for categoryLabel(meta(category), t). */
+  label: (category: string | null | undefined, t: (key: string) => string) => string
+}
+
+export function buildCostCategoryIndex(customRows: readonly CostCategoryRecord[]): CostCategoryIndex {
+  const custom: CostCategoryMeta[] = customRows.map(row => ({
+    key: customCostCategoryKey(row.id),
+    labelKey: '',
+    label: row.name,
+    Icon: COST_CATEGORY_ICON_COMPONENTS[row.icon] ?? Tag,
+    color: row.color,
+    custom: row,
+  }))
+  const byKey = new Map<string, CostCategoryMeta>([
+    ...COST_CATEGORY_LIST.map(m => [m.key, m] as const),
+    ...custom.map(m => [m.key, m] as const),
+  ])
+  const ids = new Set(customRows.map(r => r.id))
+  const meta = (category: string | null | undefined) =>
+    byKey.get(resolveCostCategory(category, ids)) ?? COST_CAT_META.other
+  return {
+    list: [...COST_CATEGORY_LIST, ...custom],
+    custom,
+    meta,
+    label: (category, t) => categoryLabel(meta(category), t),
+  }
+}
+
+/** The index without custom categories, for code that has no store at hand. */
+export const FIXED_COST_CATEGORY_INDEX: CostCategoryIndex = buildCostCategoryIndex([])
+
+/**
+ * Map any stored category (incl. legacy/localized free-text values) to a fixed
+ * meta; a custom key is `other` here. Prefer an index from useCostCategoryIndex,
+ * which knows the custom categories.
  */
 export function catMeta(cat: string | null | undefined): CostCategoryMeta {
-  return COST_CAT_META[resolveCostCategory(cat)]
+  return FIXED_COST_CATEGORY_INDEX.meta(cat)
 }

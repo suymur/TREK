@@ -6,7 +6,7 @@ import {
 } from '../../nest-mcp';
 import { McpToolGuardsService } from '../mcp-shared/mcp-tool-guards.service';
 import { z } from 'zod';
-import { costStatusSchema, type CostStatus } from '@trek/shared';
+import { COST_CATEGORIES, costStatusSchema, type CostStatus } from '@trek/shared';
 import { RuntimeEnvService } from '../app-config/runtime-env.service';
 import { isDemoUserId } from '../common/demo-write';
 import { ADDON_IDS } from '../../addons';
@@ -33,6 +33,9 @@ const payersSchema = z.array(z.strictObject({
 
 /** Reusable Zod shape for the estimate/final flag, with the rule the model has to know. */
 const costStatusInput = costStatusSchema.describe('"estimate" for a planned cost that has not happened yet, "final" for the real cost. Estimates count toward the planned total but never enter the settlement (who owes whom). Defaults to "final" on create.');
+
+/** Reusable Zod shape for the category, naming the keys the Costs tab groups by (#4). */
+const categoryInput = z.string().max(100).describe(`Cost category key: one of ${COST_CATEGORIES.join(', ')}, or custom:<id> for a custom category (list_cost_categories). Any other text is shown as "other".`);
 
 /** Reusable Zod shape for an unequal split: what each participant owes. Signed, like the REST contract (#2176). */
 const splitMembersSchema = z.array(z.strictObject({
@@ -185,7 +188,7 @@ export class BudgetMcp {
     inputSchema: {
       tripId: z.number().int().positive(),
       name: z.string().min(1).max(200),
-      category: z.string().max(100).optional().describe('Budget category (e.g. Accommodation, Food, Transport)'),
+      category: categoryInput.optional(),
       total_price: z.number().describe('Signed: a negative total records a refund/partial reimbursement (#2176)'),
       currency: z.string().max(10).nullable().optional().describe('ISO currency code (e.g. "EUR"); defaults to the trip currency'),
       member_ids: z.array(z.number().int().positive()).optional().describe('Trip member user IDs splitting this expense equally. Omit to split across all trip members (owner + members); pass [] for no split.'),
@@ -260,7 +263,7 @@ export class BudgetMcp {
       tripId: z.number().int().positive(),
       itemId: z.number().int().positive(),
       name: z.string().min(1).max(200).optional(),
-      category: z.string().max(100).optional(),
+      category: categoryInput.optional(),
       total_price: z.number().optional(),
       currency: z.string().max(10).nullable().optional().describe('ISO currency code the expense is in (e.g. "USD"); null puts it back in the trip currency. Changing it re-freezes the FX rate at today\'s rate.'),
       member_ids: z.array(z.number().int().positive()).optional().describe('Trip member user IDs splitting this expense equally; replaces the current split. Omit to leave unchanged, pass [] for no split.'),
@@ -313,7 +316,7 @@ export class BudgetMcp {
     inputSchema: {
       tripId: z.number().int().positive(),
       name: z.string().min(1).max(200),
-      category: z.string().max(100).optional().describe('Budget category (e.g. Accommodation, Food, Transport)'),
+      category: categoryInput.optional(),
       total_price: z.number().describe('Signed: a negative total records a refund/partial reimbursement (#2176)'),
       note: z.string().max(500).optional(),
       userIds: z.array(z.number().int().positive()).optional().describe('User IDs splitting this item; omit to split across all trip members, or pass an empty array for no split'),

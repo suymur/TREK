@@ -19,7 +19,9 @@ import { CustomDatePicker } from '../shared/CustomDateTimePicker'
 import { localToday } from '../Planner/today'
 import { SYMBOLS, currenciesWith, SPLIT_COLORS } from './BudgetPanel.constants'
 import { amountPattern, calculateTicketShares, costStatusHintKey, costStatusTotals, finalBudgetFor, isEstimate, finalBudgetSources, hasTicketSplit, NOTE_MAX, paidByUser, payersBalanced, readTicketItems, readUserNote, rebalancePayers, settlementDate, splitEqualShares, writeTicketItems, type TicketItem } from './CostsPanel.helpers'
-import { COST_CATEGORY_LIST, catMeta } from './costsCategories'
+import { categoryLabel } from './costsCategories'
+import { initialCategoryKey, useCostCategoryIndex, useCostCategorySync } from './useCostCategories'
+import CostCategoryPickerActions from './CostCategoryPickerActions'
 import { ReceiptPreviewModal } from './ReceiptPreviewModal'
 import { COST_STATUSES, type BudgetParticipantFinal, type CostStatus } from '@trek/shared'
 import type { BudgetItem, BudgetItemReceipt } from '../../types'
@@ -107,6 +109,10 @@ export default function CostsPanel({ tripId, tripMembers = [] }: CostsPanelProps
   const [editingSettlement, setEditingSettlement] = useState<Settlement | null>(null)
   const [addingPayment, setAddingPayment] = useState(false)
 
+  // Fixed + custom categories (#4): one lookup for the list, filter, summary and CSV.
+  useCostCategorySync()
+  const cats = useCostCategoryIndex()
+
   const people = tripMembers
   const personById = useCallback((id: number) => people.find(p => p.id === id), [people])
   const personName = useCallback((id: number) => id === me ? t('costs.you') : (personById(id)?.username || '?'), [me, personById, t])
@@ -191,14 +197,14 @@ export default function CostsPanel({ tripId, tripMembers = [] }: CostsPanelProps
     let list = budgetItems.slice()
     if (filter === 'mine') list = list.filter(e => myPaidOf(e) > 0)
     if (filter === 'owed') list = list.filter(e => round2(myPaidOf(e) - myShareOf(e)) > 0)
-    // catMeta normalises legacy/free-text categories to the fixed keys, so the
+    // cats.meta normalises legacy/free-text categories to the fixed keys, so the
     // filter matches rows saved before the category rework too.
-    if (catFilter) list = list.filter(e => catMeta(e.category).key === catFilter)
+    if (catFilter) list = list.filter(e => cats.meta(e.category).key === catFilter)
     if (dayFilter) list = list.filter(e => (e.expense_date || '') === dayFilter)
     const q = search.trim().toLowerCase()
     if (q) list = list.filter(e => e.name.toLowerCase().includes(q))
     return list
-  }, [budgetItems, filter, search, catFilter, dayFilter, me])
+  }, [budgetItems, filter, search, catFilter, dayFilter, me, cats])
 
   // Settlements ("payments") shown inline in the ledger. They have no name, so a
   // text search hides them; they're excluded from the "owed" expense filter and,
@@ -237,8 +243,8 @@ export default function CostsPanel({ tripId, tripMembers = [] }: CostsPanelProps
   // ── filter dropdown options (category + single day) ──────────────────────
   const categoryOptions = useMemo(() => [
     { value: '', label: t('costs.filter.allCategories') },
-    ...COST_CATEGORY_LIST.map(c => ({ value: c.key, label: t(c.labelKey), icon: <c.Icon size={14} style={{ color: c.color }} /> })),
-  ], [t])
+    ...cats.list.map(c => ({ value: c.key, label: categoryLabel(c, t), icon: <c.Icon size={14} style={{ color: c.color }} /> })),
+  ], [t, cats])
 
   const dayOptions = useMemo(() => {
     const days = Array.from(new Set(budgetItems.map(e => e.expense_date).filter(Boolean) as string[])).sort((a, b) => b.localeCompare(a))
@@ -307,7 +313,7 @@ export default function CostsPanel({ tripId, tripMembers = [] }: CostsPanelProps
       const cur = curOf(e)
       const note = readUserNote(e)
       rows.push([
-        esc(fmtDate(e.expense_date || '')), esc(e.name), esc(t(catMeta(e.category).labelKey)),
+        esc(fmtDate(e.expense_date || '')), esc(e.name), esc(cats.label(e.category, t)),
         (e.total_price || 0).toFixed(currencyDecimals(cur)), cur,
         baseTotal(e).toFixed(currencyDecimals(base)),
         esc(note),
@@ -795,7 +801,7 @@ export default function CostsPanel({ tripId, tripMembers = [] }: CostsPanelProps
   // Called, not rendered — see MobileBody: an element here would remount the
   // list on every keystroke in the search box.
   function ExpenseRow({ e }: { e: BudgetItem }) {
-    const c = catMeta(e.category)
+    const c = cats.meta(e.category)
     const Icon = c.Icon
     const cur = curOf(e)
     const payers = (e.payers || []).filter(p => p.amount !== 0)
@@ -819,7 +825,7 @@ export default function CostsPanel({ tripId, tripMembers = [] }: CostsPanelProps
         {!isMobile && (
           <span aria-hidden="true" style={{ position: 'absolute', left: -1, top: -1, display: 'inline-flex', alignItems: 'center', gap: 5, padding: '3px 11px 4px 10px', borderRadius: '17px 0 12px 0', background: c.color, color: '#fff', fontSize: 'calc(9.5px * var(--fs-scale-caption, 1))', fontWeight: 800, letterSpacing: '0.05em', textTransform: 'uppercase', lineHeight: 1.2 }}>
             <Icon size={10} strokeWidth={2.4} />
-            {t(c.labelKey)}
+            {categoryLabel(c, t)}
           </span>
         )}
 
@@ -1101,8 +1107,8 @@ export default function CostsPanel({ tripId, tripMembers = [] }: CostsPanelProps
     // category's sum, and a category that nets negative keeps its own row —
     // just without a bar, since the bars rank positive spend.
     const tot: Record<string, number> = {}
-    for (const e of budgetItems) { const k = catMeta(e.category).key; tot[k] = (tot[k] || 0) + baseTotal(e) }
-    const rows = COST_CATEGORY_LIST.filter(c => (tot[c.key] || 0) !== 0).sort((a, b) => (tot[b.key] || 0) - (tot[a.key] || 0))
+    for (const e of budgetItems) { const k = cats.meta(e.category).key; tot[k] = (tot[k] || 0) + baseTotal(e) }
+    const rows = cats.list.filter(c => (tot[c.key] || 0) !== 0).sort((a, b) => (tot[b.key] || 0) - (tot[a.key] || 0))
     if (rows.length === 0) return <div className="text-content-faint" style={{ fontSize: 'calc(12.5px * var(--fs-scale-body, 1))' }}>{t('costs.noCategories')}</div>
     // Bars are scaled relative to the most expensive category (the top row fills the
     // bar), not to the trip grand total — makes the relative ranking readable.
@@ -1114,7 +1120,7 @@ export default function CostsPanel({ tripId, tripMembers = [] }: CostsPanelProps
           return (
             <div key={c.key} style={{ display: 'grid', gridTemplateColumns: 'auto 1fr auto', gap: 10, alignItems: 'center' }}>
               <span style={{ width: 10, height: 10, borderRadius: 3, background: c.color }} />
-              <span className="text-content" style={{ fontSize: 'calc(13px * var(--fs-scale-body, 1))', fontWeight: 500 }}>{t(c.labelKey)}</span>
+              <span className="text-content" style={{ fontSize: 'calc(13px * var(--fs-scale-body, 1))', fontWeight: 500 }}>{categoryLabel(c, t)}</span>
               <span className="text-content-muted" style={{ fontSize: 'calc(13px * var(--fs-scale-body, 1))', fontWeight: 600 }}>{fmt0(v)}</span>
               <div className="bg-surface-secondary" style={{ gridColumn: '1 / -1', height: 5, borderRadius: 3, overflow: 'hidden', marginTop: -2 }}>
                 <span style={{ display: 'block', height: '100%', width: pct + '%', background: c.color, borderRadius: 3 }} />
@@ -1274,9 +1280,11 @@ export function ExpenseModal({ tripId, base, people, me, editing, prefill, onClo
   const { addBudgetItem, updateBudgetItem } = useTripStore()
   const { convert } = useExchangeRates(base)
   const sym = (c: string) => SYMBOLS[c] || (c + ' ')
+  useCostCategorySync()
+  const cats = useCostCategoryIndex()
 
   const [name, setName] = useState(editing?.name || prefill?.name || '')
-  const [cat, setCat] = useState<string>(editing ? catMeta(editing.category).key : (prefill?.category || 'food'))
+  const [cat, setCat] = useState<string>(editing ? initialCategoryKey(editing.category) : (prefill?.category || 'food'))
   const [currency, setCurrency] = useState((editing?.currency || base).toUpperCase())
   const [day, setDay] = useState(editing?.expense_date || localToday())
   const [note, setNote] = useState(() => readUserNote(editing))
@@ -1658,17 +1666,18 @@ export function ExpenseModal({ tripId, base, people, me, editing, prefill, onClo
         <div className={panelCls}>
           <label className={labelCls}>{t('costs.category')}</label>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 7 }}>
-            {COST_CATEGORY_LIST.map(c => {
+            {cats.list.map(c => {
               const Icon = c.Icon; const on = cat === c.key
               return (
                 <button type="button" key={c.key} onClick={() => setCat(c.key)}
                   className={on ? 'bg-surface-card text-content border' : 'bg-surface-secondary text-content-muted border border-edge'}
                   style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '6px 11px 6px 7px', borderRadius: 999, fontSize: 'calc(12.5px * var(--fs-scale-body, 1))', fontWeight: 500, cursor: 'pointer', fontFamily: 'inherit', borderColor: on ? 'var(--text-primary)' : undefined }}>
                   <span style={{ width: 20, height: 20, borderRadius: 6, display: 'grid', placeItems: 'center', background: c.color + '22', color: c.color }}><Icon size={12} /></span>
-                  {t(c.labelKey)}
+                  {categoryLabel(c, t)}
                 </button>
               )
             })}
+            <CostCategoryPickerActions selected={cat} onSelect={setCat} variant="desktop" />
           </div>
         </div>
 

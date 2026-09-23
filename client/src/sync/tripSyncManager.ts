@@ -37,6 +37,7 @@ import { isEffectivelyOffline } from './networkMode'
 import { getOfflinePrefs, isTripOfflineEnabled, isTripPinned } from './offlinePrefs'
 import { useSettingsStore } from '../store/settingsStore'
 import type { Trip, Day, Place, PackingItem, TodoItem, BudgetItem, Reservation, TripFile, Accommodation, TripMember } from '../types'
+import { costCategoryRepo } from '../repo/costCategoryRepo'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -267,6 +268,8 @@ export const tripSyncManager = {
       // a logout in between would put these rows in the anonymous database.
       tagsApi.list().then(d => { if (isAuthed()) upsertTags(d.tags) }).catch(() => {})
       categoriesApi.list().then(d => { if (isAuthed()) upsertCategories(d.categories) }).catch(() => {})
+      // Custom cost categories (#4): the repo caches what it reads; skipped once signed out.
+      if (isAuthed()) costCategoryRepo.list().catch(() => {})
 
       // Cache file blobs + map tiles in background (don't block syncAll)
       const cacheTiles = getOfflinePrefs().cacheTiles
@@ -341,6 +344,7 @@ export const tripSyncManager = {
       await Promise.all([
         tagsApi.list().then(d => upsertTags(d.tags)).catch(() => {}),
         categoriesApi.list().then(d => upsertCategories(d.categories)).catch(() => {}),
+        costCategoryRepo.list().catch(() => {}),
       ])
 
       // 2) File blobs — awaited so "prepared" really means downloaded.

@@ -13,7 +13,9 @@ import { formatMoney, localizeAmountInput, amountToInputString } from '../../../
 import { openFile } from '../../../../utils/fileDownload'
 import { saveWithReceipts } from '../../../../components/Budget/receiptUploads'
 import { SYMBOLS, SPLIT_COLORS, currenciesWith } from '../../../../components/Budget/BudgetPanel.constants'
-import { COST_CATEGORY_LIST, catMeta } from '../../../../components/Budget/costsCategories'
+import { categoryLabel } from '../../../../components/Budget/costsCategories'
+import { initialCategoryKey, useCostCategoryIndex, useCostCategorySync } from '../../../../components/Budget/useCostCategories'
+import CostCategoryPickerActions from '../../../../components/Budget/CostCategoryPickerActions'
 import { localToday } from '../../../../components/Planner/today'
 import { amountPattern, calculateTicketShares, costStatusHintKey, hasTicketSplit, NOTE_MAX, readTicketItems, readUserNote, splitEqualShares, writeTicketItems, type TicketItem } from '../../../../components/Budget/CostsPanel.helpers'
 import type { ExpensePrefill } from '../../../../components/Budget/CostsPanel'
@@ -73,7 +75,9 @@ export default function MCostSheet({ tripId, base, people, me, editing, prefill,
   }
 
   const [name, setName] = useState(editing?.name || prefill?.name || '')
-  const [cat, setCat] = useState<string>(editing ? catMeta(editing.category).key : (prefill?.category || 'food'))
+  useCostCategorySync()
+  const cats = useCostCategoryIndex()
+  const [cat, setCat] = useState<string>(editing ? initialCategoryKey(editing.category) : (prefill?.category || 'food'))
   const [catOpen, setCatOpen] = useState(false)
   const [note, setNote] = useState(() => readUserNote(editing))
   const [costStatus, setCostStatus] = useState<CostStatus>(editing?.cost_status ?? 'final')
@@ -445,16 +449,16 @@ export default function MCostSheet({ tripId, base, people, me, editing, prefill,
           className="flex w-full items-center gap-[10px] overflow-hidden rounded-xl border border-[color:var(--m-rowbr)] bg-m-card px-[13px] py-[11px] text-left"
         >
           {(() => {
-            const meta = catMeta(cat)
+            const meta = cats.meta(cat)
             const Icon = meta.Icon
             return <Icon size={15} strokeWidth={2} style={{ color: meta.color }} className="flex-none" />
           })()}
-          <span className="min-w-0 flex-1 truncate text-[0.8125rem] font-semibold text-m-ink">{t(catMeta(cat).labelKey)}</span>
+          <span className="min-w-0 flex-1 truncate text-[0.8125rem] font-semibold text-m-ink">{cats.label(cat, t)}</span>
           <ChevronDown size={14} strokeWidth={2} className={`flex-none text-m-faint transition-transform duration-200 ${catOpen ? 'rotate-180' : ''}`} />
         </button>
         {catOpen && (
           <div className="mt-[6px] max-h-[240px] overflow-y-auto overscroll-contain rounded-2xl border border-[color:var(--m-rowbr)] bg-[color:var(--m-glass)]">
-            {COST_CATEGORY_LIST.map(c => {
+            {cats.list.map(c => {
               const Icon = c.Icon
               const on = cat === c.key
               return (
@@ -466,11 +470,12 @@ export default function MCostSheet({ tripId, base, people, me, editing, prefill,
                   className="flex w-full items-center gap-[10px] border-b border-[color:var(--m-rowbr)] px-[13px] py-[11px] text-left last:border-b-0"
                 >
                   <Icon size={14} strokeWidth={2} style={{ color: c.color }} className="flex-none" />
-                  <span className={`flex-1 text-[0.78125rem] ${on ? 'font-bold text-m-ink' : 'font-medium text-m-muted'}`}>{t(c.labelKey)}</span>
+                  <span className={`flex-1 text-[0.78125rem] ${on ? 'font-bold text-m-ink' : 'font-medium text-m-muted'}`}>{categoryLabel(c, t)}</span>
                   {on && <Check size={14} strokeWidth={2.4} className="flex-none text-m-ink" />}
                 </button>
               )
             })}
+            <CostCategoryPickerActions selected={cat} onSelect={k => { setCat(k); setCatOpen(false) }} variant="mobile" />
           </div>
         )}
 

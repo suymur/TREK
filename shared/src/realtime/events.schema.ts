@@ -273,6 +273,11 @@ export const TREK_WS_EVENTS = {
   'notification:new': { scope: 'user', payload: z.object({ notification: entity }) },
   'notification:updated': { scope: 'user', payload: z.object({ notification: entity }) },
 
+  // ── Custom cost categories (#4) ──────────────────────────────────────────
+  // Instance-wide list; the server fans the full list out to every online user
+  // (broadcastToUser per user — there is no instance-wide room).
+  'costs:categories-changed': { scope: 'user', payload: z.object({ categories: z.array(entity) }) },
+
   // ── Collections (user-scoped) ────────────────────────────────────────────
   'collections:updated': { scope: 'user', payload: z.object({ collectionId: id }) },
   'collections:accepted': { scope: 'user', payload: z.object({ collectionId: id }) },

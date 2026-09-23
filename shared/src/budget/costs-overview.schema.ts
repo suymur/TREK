@@ -1,5 +1,11 @@
 import { idSchema } from '../common/primitives.schema';
 import { COST_CATEGORIES, type CostCategory } from './budget.schema';
+import {
+  customCostCategoryKey,
+  parseCustomCostCategoryId,
+  type CostCategoryKey,
+  type CustomCostCategoryKey,
+} from './cost-categories.schema';
 
 import { z } from 'zod';
 
@@ -76,13 +82,23 @@ const COST_CATEGORY_SET: ReadonlySet<string> = new Set(COST_CATEGORIES);
  * Costs tab and the cross-trip overview both group by it, so an expense lands in
  * the same bucket on both screens. Unknown and empty values are `other`.
  */
-export function resolveCostCategory(category: string | null | undefined): CostCategory {
+export function resolveCostCategory(
+  category: string | null | undefined,
+  customIds?: ReadonlySet<number>,
+): CostCategoryKey {
   if (!category) return 'other';
   if (COST_CATEGORY_SET.has(category)) return category as CostCategory;
+  const customId = parseCustomCostCategoryId(category);
+  if (customId !== null) return !customIds || customIds.has(customId) ? customCostCategoryKey(customId) : 'other';
   return LEGACY_CATEGORY_MAP[category.trim().toLowerCase()] ?? 'other';
 }
 
-const costCategorySchema = z.enum(COST_CATEGORIES);
+const customCostCategoryKeySchema = z
+  .string()
+  .refine((v) => parseCustomCostCategoryId(v) !== null, { message: 'must be custom:<id>' })
+  .transform((v) => v as CustomCostCategoryKey);
+export const costCategoryKeySchema = z.union([z.enum(COST_CATEGORIES), customCostCategoryKeySchema]);
+const costCategorySchema = costCategoryKeySchema;
 
 /**
  * One person's share of a figure (a trip, or one category of a trip): the sum of
@@ -152,7 +168,7 @@ export const costsOverviewTripSchema = z.object({
   estimated_total: z.number(),
   /** Estimate in display currency, or null without an exchange rate. */
   estimated_display_total: z.number().nullable(),
-  /** Categories with at least one expense of either status, in COST_CATEGORIES order. */
+  /** Categories with at least one expense of either status: fixed keys, then custom keys in sort order. */
   categories: z.array(costsOverviewTripCategorySchema),
   people: z.array(costsOverviewShareSchema),
   unassigned: costsOverviewUnassignedSchema,

@@ -10,6 +10,7 @@ import { assignmentsHandlers } from './assignments';
 import { packingHandlers } from './packing';
 import { todoHandlers } from './todo';
 import { budgetHandlers } from './budget';
+import { costCategoryHandlers } from './costCategories';
 import { reservationsHandlers } from './reservations';
 import { filesHandlers } from './files';
 import { tagsHandlers } from './tags';
@@ -31,6 +32,7 @@ export const defaultHandlers = [
   ...packingHandlers,
   ...todoHandlers,
   ...budgetHandlers,
+  ...costCategoryHandlers,
   ...reservationsHandlers,
   ...filesHandlers,
   ...tagsHandlers,

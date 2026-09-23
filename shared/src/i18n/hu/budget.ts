@@ -124,6 +124,19 @@ const budget: TranslationStrings = {
   'costs.cat.fuel': 'Üzemanyag',
   'costs.cat.parking': 'Parkolás',
   'costs.cat.other': 'Egyéb',
+  'costs.customCat.new': 'Új kategória',
+  'costs.customCat.edit': 'Kategória szerkesztése',
+  'costs.customCat.name': 'Név',
+  'costs.customCat.namePlaceholder': 'pl. Dekoráció',
+  'costs.customCat.icon': 'Ikon',
+  'costs.customCat.color': 'Szín',
+  'costs.customCat.shared': 'Az egyéni kategóriákat ezen a szerveren mindenki látja és használhatja.',
+  'costs.customCat.delete': 'Kategória törlése',
+  'costs.customCat.deleteConfirm': 'Törlöd: „{name}”? A kiadásai minden utazásban az Egyéb kategóriába kerülnek.',
+  'costs.customCat.deleted': 'Kategória törölve. {count} kiadás került az Egyéb kategóriába.',
+  'costs.customCat.duplicate': 'Már van ilyen nevű kategória.',
+  'costs.customCat.notAllowed': 'Ezt a kategóriát csak a létrehozója vagy egy admin módosíthatja.',
+  'costs.customCat.offline': 'A kategóriák csak online módosíthatók.',
   'costs.daysCount': '{count} nap',
   'costs.travelers': '{count} utazó',
   'costs.liveRate': 'élő árfolyam',
@@ -165,6 +178,7 @@ const budget: TranslationStrings = {
   'costs.noReceipts': 'Nincsenek csatolt nyugták',
   'costs.deleteReceipt': 'Nyugta eltávolítása',
   'costs.viewReceipt': 'Nyugta megtekintése',
-  'costs.receiptLeftBehind': 'A mentés nem sikerült, és {count} feltöltött blokk még ott van. Törölje őket a Fájlok fülön.',
+  'costs.receiptLeftBehind':
+    'A mentés nem sikerült, és {count} feltöltött blokk még ott van. Törölje őket a Fájlok fülön.',
 };
 export default budget;

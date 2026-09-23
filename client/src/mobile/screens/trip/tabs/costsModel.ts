@@ -1,6 +1,6 @@
-import type { BudgetParticipantFinal, CostCategory } from '@trek/shared'
+import type { BudgetParticipantFinal, CostCategoryKey } from '@trek/shared'
 import { costStatusTotals, isEstimate, paidByUser, readUserNote, settlementDate, splitEqualShares } from '../../../../components/Budget/CostsPanel.helpers'
-import { catMeta, COST_CATEGORY_LIST } from '../../../../components/Budget/costsCategories'
+import { FIXED_COST_CATEGORY_INDEX, type CostCategoryIndex } from '../../../../components/Budget/costsCategories'
 import { convertBooked } from '../../../../hooks/useExchangeRates'
 import { currencyDecimals } from '../../../../utils/formatters'
 import type { BudgetItem } from '../../../../types'
@@ -20,7 +20,11 @@ export interface CostsCtx {
   /** The trip's own currency — what a NULL `budget_items.currency` means. */
   tripCurrency: string
   convert: (amount: number, currency: string | null | undefined) => number
+  /** Fixed + custom categories (#4); without it only the fixed ones are known. */
+  cats?: CostCategoryIndex
 }
+
+const catsOf = (ctx?: Pick<CostsCtx, 'cats'>): CostCategoryIndex => ctx?.cats ?? FIXED_COST_CATEGORY_INDEX
 
 /** An expense's own currency, defaulting to the trip currency (NULL column = trip currency). */
 export function currencyOf(e: BudgetItem, ctx: CostsCtx): string {
@@ -170,7 +174,7 @@ export function filterBudgetItems(items: BudgetItem[], f: CostsFilterState, ctx:
   let list = items.slice()
   if (f.segment === 'mine') list = list.filter(e => myPaidOf(e, ctx) > 0)
   if (f.segment === 'owed') list = list.filter(e => round2(myPaidOf(e, ctx) - myShareOf(e, ctx)) > 0)
-  if (f.categoryKey) list = list.filter(e => catMeta(e.category).key === f.categoryKey)
+  if (f.categoryKey) list = list.filter(e => catsOf(ctx).meta(e.category).key === f.categoryKey)
   if (f.dayKey) list = list.filter(e => (e.expense_date || '') === f.dayKey)
   const q = f.search.trim().toLowerCase()
   if (q) list = list.filter(e => e.name.toLowerCase().includes(q))
@@ -253,9 +257,10 @@ export function groupLedgerByDay(items: BudgetItem[], settlements: CostsSettleme
 }
 
 /** Categories present among `items`, canonical order — the dropdown only lists categories in use (spec §3.6). */
-export function categoryFilterKeys(items: BudgetItem[]): CostCategory[] {
-  const present = new Set(items.map(e => catMeta(e.category).key))
-  return COST_CATEGORY_LIST.map(c => c.key).filter(k => present.has(k))
+export function categoryFilterKeys(items: BudgetItem[], ctx?: Pick<CostsCtx, 'cats'>): CostCategoryKey[] {
+  const cats = catsOf(ctx)
+  const present = new Set(items.map(e => cats.meta(e.category).key))
+  return cats.list.map(c => c.key).filter(k => present.has(k))
 }
 
 /** Distinct expense dates, ascending (spec §3.6: "Tage mit Ausgaben aufsteigend"). */
@@ -267,7 +272,7 @@ export function dayFilterKeys(items: BudgetItem[]): string[] {
 // ── by-category breakdown (spec §3.5) ───────────────────────────────────────
 
 export interface CostsCategoryBar {
-  key: CostCategory
+  key: CostCategoryKey
   amount: number
   /** 0-100, relative to the largest category (not the grand total) — spec §3.5. */
   widthPct: number
@@ -278,12 +283,13 @@ export function categoryBreakdown(items: BudgetItem[], ctx: CostsCtx): CostsCate
   // category's sum. A category that nets negative keeps its own row at the
   // bottom, with widthPct 0 — the bars rank positive spend, and a negative
   // CSS width would be dropped and render as a full bar.
-  const totals = new Map<CostCategory, number>()
+  const cats = catsOf(ctx)
+  const totals = new Map<CostCategoryKey, number>()
   for (const e of items) {
-    const key = catMeta(e.category).key
+    const key = cats.meta(e.category).key
     totals.set(key, (totals.get(key) || 0) + baseTotal(e, ctx))
   }
-  const rows = COST_CATEGORY_LIST
+  const rows = cats.list
     .map(c => ({ key: c.key, amount: totals.get(c.key) || 0 }))
     .filter(r => r.amount !== 0)
     .sort((a, b) => b.amount - a.amount)
@@ -342,7 +348,7 @@ export function buildCostsCsv(items: BudgetItem[], opts: CsvBuildOptions): { fil
       [
         esc(fmtDate(e.expense_date || '')),
         esc(e.name),
-        esc(opts.t(catMeta(e.category).labelKey)),
+        esc(catsOf(opts.ctx).label(e.category, opts.t)),
         (e.total_price || 0).toFixed(currencyDecimals(cur)),
         cur,
         baseTotal(e, opts.ctx).toFixed(currencyDecimals(opts.base)),
