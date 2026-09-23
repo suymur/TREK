@@ -76,7 +76,7 @@ function sumMoney(amounts: number[]): number {
  * own sum; the rows behind a figure pass the figure's already allocated cents
  * instead, so a list nested under a line lands exactly on that line.
  */
-function allocateDisplayCents(cents: number[], factor: number, total = Math.round(cents.reduce((a, c) => a + c, 0) * factor)): number[] {
+export function allocateDisplayCents(cents: number[], factor: number, total = Math.round(cents.reduce((a, c) => a + c, 0) * factor)): number[] {
   if (factor === 1) return [...cents];
   const exact = cents.map(c => c * factor);
   const out = exact.map(v => Math.floor(v));
@@ -86,6 +86,43 @@ function allocateDisplayCents(cents: number[], factor: number, total = Math.roun
     .sort((a, b) => b.frac - a.frac || a.i - b.i);
   for (let k = 0; k < drift && k < byFraction.length; k++) out[byFraction[k].i] += 1;
   return out;
+}
+
+/**
+ * Largest-remainder split of an expense across its participants. Takes and
+ * returns **whole cents**, so the shares add back up to the input exactly —
+ * the settlement ledger is netted in integer cents (#1382).
+ *
+ * The remainder cent rotates with the item id rather than always landing on the
+ * first member, so across several expenses the rounding evens out instead of
+ * always favouring the same person.
+ *
+ * Floor-based (`totalCents - baseCents * n`, never `%`), so a negative total —
+ * a refund split across its beneficiaries (#2176) — still yields a remainder
+ * in [0, n) and shares that sum back to the total exactly. The client mirror
+ * (CostsPanel.helpers.splitEqualShares) must stay share-for-share identical;
+ * the parity fixture in budget.service.calc.test.ts pins both sides.
+ *
+ * Exported for the cross-trip cost overview (#2), which splits the same way.
+ */
+export function splitEqualShares(totalCents: number, members: { user_id: number }[], itemId: number): Record<number, number> {
+  const n = members.length;
+  if (n === 0) return {};
+
+  const baseCents = Math.floor(totalCents / n);
+  const remainder = totalCents - baseCents * n;
+
+  const shares: Record<number, number> = {};
+  const sortedMembers = [...members].sort((a, b) => a.user_id - b.user_id);
+  const startIndex = itemId % n;
+
+  for (let i = 0; i < n; i++) {
+    const member = sortedMembers[i];
+    const hasExtraCent = ((i - startIndex + n) % n) < remainder;
+    shares[member.user_id] = baseCents + (hasExtraCent ? 1 : 0);
+  }
+
+  return shares;
 }
 
 /**
@@ -835,39 +872,9 @@ export class BudgetService {
     return summary.map(s => ({ ...s, avatar_url: avatarUrl(s) }));
   }
 
-  /**
-   * Largest-remainder split of an expense across its participants. Takes and
-   * returns **whole cents**, so the shares add back up to the input exactly —
-   * the settlement ledger is netted in integer cents (#1382).
-   *
-   * The remainder cent rotates with the item id rather than always landing on the
-   * first member, so across several expenses the rounding evens out instead of
-   * always favouring the same person.
-   *
-   * Floor-based (`totalCents - baseCents * n`, never `%`), so a negative total —
-   * a refund split across its beneficiaries (#2176) — still yields a remainder
-   * in [0, n) and shares that sum back to the total exactly. The client mirror
-   * (CostsPanel.helpers.splitEqualShares) must stay share-for-share identical;
-   * the parity fixture in budget.service.calc.test.ts pins both sides.
-   */
+  /** The settlement's entry point to the module-level splitEqualShares (the parity test reaches it here). */
   private splitEqualShares(totalCents: number, members: { user_id: number }[], itemId: number): Record<number, number> {
-    const n = members.length;
-    if (n === 0) return {};
-
-    const baseCents = Math.floor(totalCents / n);
-    const remainder = totalCents - baseCents * n;
-
-    const shares: Record<number, number> = {};
-    const sortedMembers = [...members].sort((a, b) => a.user_id - b.user_id);
-    const startIndex = itemId % n;
-
-    for (let i = 0; i < n; i++) {
-      const member = sortedMembers[i];
-      const hasExtraCent = ((i - startIndex + n) % n) < remainder;
-      shares[member.user_id] = baseCents + (hasExtraCent ? 1 : 0);
-    }
-
-    return shares;
+    return splitEqualShares(totalCents, members, itemId);
   }
 
   /**

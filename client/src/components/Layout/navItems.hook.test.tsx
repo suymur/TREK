@@ -1,6 +1,6 @@
-// FE-W4NAVH-001 to FE-W4NAVH-005
+// FE-W4NAVH-001 to FE-W4NAVH-007
 import { describe, it, expect, beforeEach } from 'vitest'
-import { CalendarDays, Globe, LayoutGrid } from 'lucide-react'
+import { CalendarDays, Globe, LayoutGrid, Wallet } from 'lucide-react'
 import { renderHook } from '@testing-library/react'
 import { TranslationProvider } from '../../i18n/TranslationContext'
 import { useAddonStore } from '../../store/addonStore'
@@ -45,8 +45,33 @@ describe('useNavItems', () => {
     useAddonStore.setState({
       addons: [
         { id: 'vacay', name: 'Vacay', icon: 'Calendar', type: 'global', enabled: false },
-        { id: 'budget', name: 'Budget', icon: 'Wallet', type: 'trip', enabled: true },
+        { id: 'packing', name: 'Lists', icon: 'ListChecks', type: 'trip', enabled: true },
       ] as never,
+    })
+
+    const { result } = render()
+
+    expect(result.current.map(i => i.id)).toEqual(['dashboard'])
+  })
+
+  it('FE-W4NAVH-006: the enabled Costs addon adds the cost overview after the global addons', () => {
+    useAddonStore.setState({
+      addons: [
+        { id: 'budget', name: 'Budget', icon: 'Wallet', type: 'trip', enabled: true },
+        { id: 'vacay', name: 'Vacay', icon: 'Calendar', type: 'global', enabled: true },
+      ] as never,
+    })
+    usePluginStore.setState({ plugins: [{ id: 'notes', name: 'Notes', icon: null, type: 'page' }] as never })
+
+    const { result } = render()
+
+    expect(result.current.map(i => i.id)).toEqual(['dashboard', 'vacay', 'costs', 'plugin:notes'])
+    expect(result.current[2]).toMatchObject({ to: '/costs', label: 'Costs', icon: Wallet })
+  })
+
+  it('FE-W4NAVH-007: a disabled Costs addon has no cost overview entry', () => {
+    useAddonStore.setState({
+      addons: [{ id: 'budget', name: 'Budget', icon: 'Wallet', type: 'trip', enabled: false }] as never,
     })
 
     const { result } = render()
