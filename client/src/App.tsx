@@ -56,6 +56,7 @@ const JourneyPublicPage = lazyWithRetry(() => import('./pages/JourneyPublicPage'
 const SharedTripPage = lazyWithRetry(() => import('./pages/SharedTripPage'))
 const JoinTripPage = lazyWithRetry(() => import('./pages/JoinTripPage'))
 const InAppNotificationsPage = lazyWithRetry(() => import('./pages/InAppNotificationsPage.tsx'))
+const CostsOverviewPage = lazyWithRetry(() => import('./pages/CostsOverviewPage'))
 const OAuthAuthorizePage = lazyWithRetry(() => import('./pages/OAuthAuthorizePage'))
 
 // The ten phone screens are chunks of their own, alongside the desktop pages
@@ -74,6 +75,7 @@ const MJourneyScreen = lazyWithRetry(() => import('./mobile/screens/journey/MJou
 const MJourneyDetailScreen = lazyWithRetry(() => import('./mobile/screens/journey/MJourneyDetail'))
 const MCollectionsScreen = lazyWithRetry(() => import('./mobile/screens/collections/MCollections'))
 const MNotificationsScreen = lazyWithRetry(() => import('./mobile/screens/notifications/MNotifications'))
+const MCostsOverviewScreen = lazyWithRetry(() => import('./mobile/screens/costs/MCostsOverview'))
 
 interface ProtectedRouteProps {
   children: ReactNode
@@ -528,6 +530,14 @@ export default function App() {
             element={
               <ProtectedRoute>
                 <ViewportRoute phone={MVacayScreen} desktop={VacayPage} />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/costs"
+            element={
+              <ProtectedRoute addonId="budget">
+                <ViewportRoute phone={MCostsOverviewScreen} desktop={CostsOverviewPage} />
               </ProtectedRoute>
             }
           />

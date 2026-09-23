@@ -76,7 +76,7 @@ function sumMoney(amounts: number[]): number {
  * own sum; the rows behind a figure pass the figure's already allocated cents
  * instead, so a list nested under a line lands exactly on that line.
  */
-function allocateDisplayCents(cents: number[], factor: number, total = Math.round(cents.reduce((a, c) => a + c, 0) * factor)): number[] {
+export function allocateDisplayCents(cents: number[], factor: number, total = Math.round(cents.reduce((a, c) => a + c, 0) * factor)): number[] {
   if (factor === 1) return [...cents];
   const exact = cents.map(c => c * factor);
   const out = exact.map(v => Math.floor(v));
