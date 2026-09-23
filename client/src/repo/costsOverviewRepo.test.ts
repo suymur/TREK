@@ -1,10 +1,11 @@
 import { describe, it, expect, afterEach } from 'vitest'
 import { http, HttpResponse } from 'msw'
 import { server } from '../../tests/helpers/msw/server'
+import { buildCostsOverview } from '../../tests/helpers/costsOverview'
 import { setForcedOffline } from '../sync/networkMode'
 import { costsOverviewRepo, CostsOverviewOfflineError } from './costsOverviewRepo'
 
-const empty = { currency: 'EUR', trips: [], total: 0, categories: [], unconverted_trip_ids: [] }
+const empty = buildCostsOverview({ trips: [], total: 0, categories: [], people: [], unassigned: 0, participants: [] })
 
 afterEach(() => setForcedOffline(false))
 

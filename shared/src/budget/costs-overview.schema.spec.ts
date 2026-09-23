@@ -35,6 +35,8 @@ describe('costsOverviewResponseSchema', () => {
     display_total: 12.5,
     estimated_total: 0,
     estimated_display_total: 0,
+    open_total: 0,
+    display_open_total: 0,
     categories: [
       {
         category: 'food',
@@ -57,6 +59,7 @@ describe('costsOverviewResponseSchema', () => {
       trips: [trip],
       total: 12.5,
       estimated_total: 0,
+      open_total: 0,
       categories: [
         { category: 'food', total: 12.5, estimated_total: 0, people: [{ user_id: 2, total: 10 }], unassigned: 2.5 },
       ],
@@ -76,6 +79,7 @@ describe('costsOverviewResponseSchema', () => {
           ...trip,
           display_total: null,
           estimated_display_total: null,
+          display_open_total: null,
           categories: [
             {
               category: 'food',
@@ -93,6 +97,7 @@ describe('costsOverviewResponseSchema', () => {
       ],
       total: 0,
       estimated_total: 0,
+      open_total: 0,
       categories: [],
       ...none,
       unconverted_trip_ids: [1],
@@ -106,6 +111,7 @@ describe('costsOverviewResponseSchema', () => {
       trips: [],
       total: 0,
       estimated_total: 0,
+      open_total: 0,
       categories: [{ category: 'Hotel', total: 1, people: [], unassigned: 1 }],
       ...none,
       unconverted_trip_ids: [],
@@ -119,6 +125,7 @@ describe('costsOverviewResponseSchema', () => {
       trips: [{ ...trip, people: [{ total: 10, display_total: 10 }] }],
       total: 12.5,
       estimated_total: 0,
+      open_total: 0,
       categories: [],
       ...none,
       unconverted_trip_ids: [],

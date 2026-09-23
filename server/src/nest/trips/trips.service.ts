@@ -567,7 +567,8 @@ export class TripsService {
    * Cross-links are remapped to the copied rows (reservation↔budget item,
    * reservation↔accommodation) and split data travels with the copy
    * (budget_item_members/payers incl. paid flags, assignment_participants).
-   * Packing items and to-dos are reset to unchecked. Returns the new trip's ID.
+   * Packing items and to-dos are reset to unchecked, and expense installments
+   * to open. Returns the new trip's ID.
    */
   copy(sourceTripId: string | number, newOwnerId: number, title?: string): number {
     const src = this.db.prepare('SELECT * FROM trips WHERE id = ?').get(sourceTripId) as any;
@@ -778,6 +779,36 @@ export class TripsService {
       for (const bp of oldBudgetPayers) {
         const newItemId = budgetMap.get(bp.budget_item_id);
         if (newItemId) insertBudgetPayer.run(newItemId, bp.user_id, bp.amount ?? 0);
+      }
+
+      // Installments (#6) travel with their expense, but open: a copy is a new
+      // trip whose payments have not been made yet, the same reason packing
+      // items and to-dos come over unchecked. Labels, amounts, due days and
+      // order stay as they were.
+      const oldInstallments = this.db.prepare(`
+        SELECT bii.* FROM budget_item_installments bii JOIN budget_items b ON b.id = bii.budget_item_id WHERE b.trip_id = ?
+      `).all(sourceTripId) as any[];
+      const insertInstallment = this.db.prepare('INSERT INTO budget_item_installments (budget_item_id, label, amount, due_date, paid_at, sort_order) VALUES (?, ?, ?, ?, NULL, ?)');
+      const installmentMap = new Map<number, number | bigint>();
+      for (const bi of oldInstallments) {
+        const newItemId = budgetMap.get(bi.budget_item_id);
+        if (newItemId) {
+          const inserted = insertInstallment.run(newItemId, bi.label, bi.amount, bi.due_date, bi.sort_order);
+          installmentMap.set(bi.id, inserted.lastInsertRowid);
+        }
+      }
+      // The copier keeps budget participant user IDs unchanged, so each deposit
+      // allocation follows the mapped installment and still points at the same
+      // copied expense member. Paid dates reset; allocations describe the split.
+      const oldAllocations = this.db.prepare(`
+        SELECT im.* FROM budget_item_installment_members im
+        JOIN budget_item_installments i ON i.id = im.installment_id
+        JOIN budget_items b ON b.id = i.budget_item_id WHERE b.trip_id = ?
+      `).all(sourceTripId) as { installment_id: number; user_id: number; amount: number }[];
+      const insertAllocation = this.db.prepare('INSERT INTO budget_item_installment_members (installment_id, user_id, amount) VALUES (?, ?, ?)');
+      for (const allocation of oldAllocations) {
+        const newInstallmentId = installmentMap.get(allocation.installment_id);
+        if (newInstallmentId) insertAllocation.run(newInstallmentId, allocation.user_id, allocation.amount);
       }
 
       const oldBags = this.db.prepare('SELECT * FROM packing_bags WHERE trip_id = ?').all(sourceTripId) as any[];

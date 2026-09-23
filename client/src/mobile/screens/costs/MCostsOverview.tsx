@@ -73,6 +73,7 @@ export default function MCostsOverview() {
                 <span className="text-right"><span className="block text-[0.6875rem] text-m-faint">{t('costsOverview.final')}</span><span className="block font-geist text-[1.25rem] font-bold tabular-nums text-m-ink">{view.totals.amount}</span></span>
               </div>
               <p className="mt-0.5 text-[0.75rem] text-m-faint">{t('costsOverview.estimated')}: {view.totals.estimated}</p>
+              {view.totals.open && <p className="text-right text-[0.6875rem] font-semibold text-warning">{t('installments.openAmount', { amount: view.totals.open })}</p>}
               <SplitLines split={view.totals} opts={split} t={t} />
               {byCategory && view.totals.categories.map(c => (
                 <CategoryLine key={c.category} category={c.category} amount={c.amount} original={null} estimated={c.estimated} estimatedOriginal={null} split={c} opts={split} t={t} />
@@ -188,6 +189,7 @@ function TripCard({ row, byCategory, split, onOpen, t }: {
           {row.original && <div className="text-[0.6875rem] text-m-faint">{row.original}</div>}
           <div className="text-[0.6875rem] text-m-faint">{t('costsOverview.estimated')}: {row.estimated ?? t('costsOverview.noRate')}</div>
           {row.estimatedOriginal && <div className="text-[0.6875rem] text-m-faint">{row.estimatedOriginal}</div>}
+          {row.open && <div className="text-[0.6875rem] font-semibold text-warning">{t('installments.openAmount', { amount: row.open })}</div>}
         </div>
         <ChevronRight size={16} strokeWidth={2} className="flex-none text-m-faint" />
       </div>

@@ -9,9 +9,23 @@ import { DatabaseService } from '../database/database.service';
 import { TripMembershipService } from '../trip-membership/trip-membership.service';
 import { ADDON_IDS } from '../../addons';
 import { BudgetService } from './budget.service';
+import { InstallmentAllocationError, InstallmentsExceedTotalError } from './budget-installments';
 
 /** Costs are budget items, and the app edits them under 'budget_edit'. */
 const BUDGET_EDIT_ACTION = 'budget_edit';
+
+/**
+ * A cost carries its installments (fork #6) in and out, exactly like the REST
+ * item. Installments adding up to more than the total are a bad parameter.
+ */
+async function refuseOverfullInstallments<T>(write: () => Promise<T>): Promise<T> {
+  try {
+    return await write();
+  } catch (err) {
+    if (err instanceof InstallmentsExceedTotalError || err instanceof InstallmentAllocationError) throw new BadParams(`invalid cost: ${err.message}`);
+    throw err;
+  }
+}
 
 /**
  * The cost surface a plugin may reach (#plugins). "Costs" are budget items, so every
@@ -67,7 +81,7 @@ export class CostsRpc {
     this.requireCostEdit(tripId, actor);
     // BudgetService.create freezes the FX rate and resolves members/payers, so the
     // plugin path produces the same row the web app would.
-    const item = await this.budget.create(String(tripId), parsed.data);
+    const item = await refuseOverfullInstallments(() => this.budget.create(String(tripId), parsed.data));
     this.realtime.broadcast(tripId, 'budget:created', { item });
     return item;
   }
@@ -82,7 +96,7 @@ export class CostsRpc {
     if (!parsed.success) throw new BadParams(`invalid cost: ${schemaMessage(parsed.error)}`);
     this.requireCostEdit(tripId, actor);
     // update re-freezes the FX rate on a currency change, exactly like create.
-    const item = await this.budget.update(String(itemId), String(tripId), parsed.data);
+    const item = await refuseOverfullInstallments(() => this.budget.update(String(itemId), String(tripId), parsed.data));
     if (item == null) throw new ForbiddenResource(`no cost ${itemId} on trip ${tripId}`);
     this.realtime.broadcast(tripId, 'budget:updated', { item });
     return item;

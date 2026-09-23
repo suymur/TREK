@@ -6,6 +6,7 @@ import type { BudgetItem, BudgetItemMember } from '../../types'
 import type { BudgetCreateItemRequest, BudgetUpdateItemRequest } from '@trek/shared'
 import { getApiErrorMessage } from '../../types'
 import { notify } from '../notify'
+import { withInstallmentPaid } from '../../utils/budgetInstallments'
 
 type SetState = StoreApi<TripStoreState>['setState']
 type GetState = StoreApi<TripStoreState>['getState']
@@ -17,6 +18,7 @@ export interface BudgetSlice {
   deleteBudgetItem: (tripId: number | string, id: number) => Promise<void>
   setBudgetItemMembers: (tripId: number | string, itemId: number, userIds: number[]) => Promise<{ members: BudgetItemMember[]; item: BudgetItem }>
   toggleBudgetMemberPaid: (tripId: number | string, itemId: number, userId: number, paid: boolean) => Promise<void>
+  setBudgetInstallmentPaid: (tripId: number | string, itemId: number, installmentId: number, paidAt: string | null) => Promise<void>
   reorderBudgetItems: (tripId: number | string, orderedIds: number[]) => Promise<void>
   reorderBudgetCategories: (tripId: number | string, orderedCategories: string[]) => Promise<void>
 }
@@ -89,6 +91,25 @@ export const createBudgetSlice = (set: SetState, get: GetState): BudgetSlice => 
           : item
       )
     }));
+  },
+
+  // Optimistic: the Due payments list drops the row at once. The server answers
+  // the whole item, which replaces the guess; a failure puts the old item back
+  // and rethrows for the caller's toast.
+  setBudgetInstallmentPaid: async (tripId, itemId, installmentId, paidAt) => {
+    const prev = get().budgetItems.find(i => i.id === itemId)
+    if (!prev) return
+    const replace = (item: BudgetItem) => set(state => ({
+      budgetItems: state.budgetItems.map(i => i.id === itemId ? item : i),
+    }))
+    replace(withInstallmentPaid(prev, installmentId, paidAt))
+    try {
+      const result = await budgetApi.setInstallmentPaid(tripId, itemId, installmentId, paidAt)
+      replace(result.item)
+    } catch (err: unknown) {
+      replace(prev)
+      throw new Error(getApiErrorMessage(err, 'Error updating the installment'))
+    }
   },
 
   reorderBudgetItems: async (tripId, orderedIds) => {

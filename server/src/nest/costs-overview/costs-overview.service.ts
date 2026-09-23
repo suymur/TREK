@@ -72,7 +72,11 @@ export class CostsOverviewService {
   private loadItems(ids: number[]): OverviewItemRow[] {
     if (ids.length === 0) return [];
     return this.db.all<OverviewItemRow>(
-      `SELECT id, trip_id, category, total_price, currency, exchange_rate, cost_status FROM budget_items WHERE trip_id IN (${placeholders(ids)})`,
+      `SELECT bi.id, bi.trip_id, bi.category, bi.total_price, bi.currency, bi.exchange_rate, bi.cost_status,
+         CASE WHEN EXISTS (SELECT 1 FROM budget_item_installments i WHERE i.budget_item_id = bi.id)
+           THEN MAX(0, bi.total_price - (SELECT COALESCE(SUM(i.amount), 0) FROM budget_item_installments i WHERE i.budget_item_id = bi.id AND i.paid_at IS NOT NULL))
+           ELSE 0 END AS open_amount
+       FROM budget_items bi WHERE bi.trip_id IN (${placeholders(ids)})`,
       ...ids,
     );
   }

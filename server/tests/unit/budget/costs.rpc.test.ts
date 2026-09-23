@@ -20,6 +20,7 @@ import type { AddonsService } from '../../../src/nest/addons/addons.service';
 import type { TripMembershipService } from '../../../src/nest/trip-membership/trip-membership.service';
 import type { RpcRequest, RpcError } from '../../../src/nest/plugins/protocol/envelope';
 import { makeDeps } from '../../helpers/rpc-host-deps';
+import { InstallmentsExceedTotalError } from '../../../src/nest/budget/budget-installments';
 
 const req = (method: string, params: Record<string, unknown> = {}): RpcRequest => ({ k: 'req', id: 'x', method, params });
 
@@ -153,6 +154,23 @@ describe('CostsRpc writes', () => {
     expect(f.budget.update).toHaveBeenCalledWith('5', '1', expect.objectContaining({ cost_status: 'final' }));
     const bad = await f.host().dispatch(req('costs.create', { tripId: 1, input: { name: 'x', cost_status: 'maybe' } }), 42);
     expect((bad as RpcError).error.message).toMatch(/^invalid cost:/);
+  });
+
+  it('COSTS-RPC-014 installments travel through create and update; an overfull list is a bad parameter', async () => {
+    const f = build();
+    const installments = [{ label: 'Deposit', amount: 100, due_date: '2026-10-01' }];
+    expect((await f.host().dispatch(req('costs.create', { tripId: 1, input: { name: 'Hotel', total_price: 300, installments } }), 42)).ok).toBe(true);
+    expect(f.budget.create).toHaveBeenCalledWith('1', expect.objectContaining({ installments }));
+
+    vi.mocked(f.budget.update).mockRejectedValueOnce(new InstallmentsExceedTotalError(400, 300));
+    const over = (await f.host().dispatch(req('costs.update', { tripId: 1, itemId: 5, input: { installments } }), 42)) as RpcError;
+    expect(over.error.message).toMatch(/^invalid cost: The installments add up to 400\.00/);
+    expect(f.realtime.broadcast).toHaveBeenCalledTimes(1);
+
+    vi.mocked(f.budget.update).mockRejectedValueOnce(new Error('disk full'));
+    const other = (await f.host().dispatch(req('costs.update', { tripId: 1, itemId: 5, input: {} }), 42)) as RpcError;
+    expect(other.ok).toBe(false);
+    expect(other.error.message).not.toMatch(/^invalid cost/);
   });
 
   it('COSTS-RPC-012 the class is listed in its module providers', () => {

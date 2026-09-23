@@ -46,6 +46,8 @@ export interface OverviewItemRow {
   currency: string | null;
   exchange_rate: number | null;
   cost_status?: 'estimate' | 'final' | null;
+  /** Unpaid part of the item, in its own currency. */
+  open_amount?: number | null;
 }
 
 export interface OverviewMemberRow {
@@ -245,17 +247,20 @@ function buildOverviewPart(
   const globalCats = new Map<CostCategoryKey, Cells>();
   const globalPeople: Cells = new Map();
   let globalTotal = 0;
+  let globalOpen = 0;
   const unconverted: number[] = [];
 
   const rows = trips.map((trip): CostsOverviewTrip => {
     const tripCurrency = tripCurrencyOf(trip);
     const tripItems = itemsByTrip.get(trip.id) ?? [];
     const catCells = new Map<CostCategoryKey, Cells>();
+    let openCents = 0;
     for (const item of tripItems) {
       const key = resolveCostCategory(item.category, known);
       const cells = catCells.get(key) ?? new Map<number, number>();
       addCells(cells, splitItemCents(item, membersByItem.get(item.id) ?? [], tripCurrency, rates));
       catCells.set(key, cells);
+      if (item.open_amount) openCents += toCents({ ...item, total_price: item.open_amount }, tripCurrency, rates);
     }
     const keys = order.filter((k) => catCells.has(k));
     const sumOf = (cells: Cells | undefined) => [...(cells?.values() ?? [])].reduce((a, c) => a + c, 0);
@@ -265,6 +270,7 @@ function buildOverviewPart(
     // A trip without expenses is 0 in any currency, rate or not.
     const factor = tripItems.length === 0 ? 1 : displayFactor(tripCurrency, display, rates);
     let displayTotal: number | null = null;
+    let displayOpen: number | null = null;
     let displayCats: (Cells | null)[] = keys.map(() => null);
     const tripCells: Cells = new Map();
     for (const k of keys) addCells(tripCells, catCells.get(k) ?? new Map());
@@ -274,6 +280,8 @@ function buildOverviewPart(
       unconverted.push(trip.id);
     } else {
       displayTotal = Math.round(totalCents * factor);
+      displayOpen = Math.round(openCents * factor);
+      globalOpen += displayOpen;
       const allocated = allocateDisplayCents(catCents, factor, displayTotal);
       displayCats = keys.map((k, i) => convertCells(catCells.get(k) ?? new Map(), factor, allocated[i] ?? 0));
       tripDisplayCells = new Map();
@@ -299,6 +307,8 @@ function buildOverviewPart(
       estimated_total: 0,
       estimated_display_total: 0,
       display_total: displayTotal === null ? null : toMoney(displayTotal),
+      open_total: toMoney(openCents),
+      display_open_total: displayOpen === null ? null : toMoney(displayOpen),
       categories: keys.map((category, i) => {
         const d = displayCats[i] ?? null;
         return {
@@ -318,6 +328,7 @@ function buildOverviewPart(
     currency: display,
     trips: rows,
     total: toMoney(globalTotal),
+    open_total: toMoney(globalOpen),
     estimated_total: 0,
     categories: order.filter((k) => globalCats.has(k)).map((category) => {
       const cells = globalCats.get(category) ?? new Map<number, number>();
@@ -358,6 +369,10 @@ export function buildCostsOverview(
       item_count: row.item_count + e.item_count,
       estimated_total: e.total,
       estimated_display_total: e.display_total,
+      open_total: toMoney(Math.round(row.open_total * 100) + Math.round(e.open_total * 100)),
+      display_open_total: row.display_open_total === null || e.display_open_total === null
+        ? null
+        : toMoney(Math.round(row.display_open_total * 100) + Math.round(e.display_open_total * 100)),
       categories: order.filter(key => fCats.has(key) || eCats.has(key)).map(key => {
         const f = fCats.get(key);
         const ec = eCats.get(key);
@@ -378,6 +393,7 @@ export function buildCostsOverview(
     ...final,
     trips: mergedTrips,
     estimated_total: estimate.total,
+    open_total: toMoney(Math.round(final.open_total * 100) + Math.round(estimate.open_total * 100)),
     categories: order.filter(key => fGlobalCats.has(key) || eGlobalCats.has(key)).map(key => ({
       ...(fGlobalCats.get(key) ?? { category: key, total: 0, people: [], unassigned: 0 }),
       estimated_total: eGlobalCats.get(key)?.total ?? 0,

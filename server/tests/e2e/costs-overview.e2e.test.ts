@@ -189,7 +189,7 @@ describe('Cost overview e2e (real auth guard + temp SQLite)', () => {
     db.prepare("INSERT INTO users (id, username, email, password_hash, role, password_version) VALUES (4, 'new', 'new@example.test', 'x', 'user', 0)").run();
     const body = costsOverviewResponseSchema.parse((await get(4)).body);
     expect(body).toEqual({
-      currency: 'EUR', trips: [], total: 0, estimated_total: 0, categories: [], people: [], unassigned: 0, participants: [], unconverted_trip_ids: [],
+      currency: 'EUR', trips: [], total: 0, estimated_total: 0, open_total: 0, categories: [], people: [], unassigned: 0, participants: [], unconverted_trip_ids: [],
     });
     expect(getRates).not.toHaveBeenCalled();
   });
@@ -204,6 +204,27 @@ describe('Cost overview e2e (real auth guard + temp SQLite)', () => {
       expect(body.trips.find(t => t.trip_id === tokyo)!.categories.find(c => c.category === 'transport')).toMatchObject({ total: 0, estimated_total: 12000 });
     } finally {
       db.prepare("UPDATE budget_items SET cost_status = 'final' WHERE id = ?").run(estimate.id);
+    }
+  });
+
+  it('shows unpaid installments of final and estimated costs without changing final totals', async () => {
+    db.prepare("INSERT INTO settings (user_id, key, value) VALUES (1, 'default_currency', '\"EUR\"')").run();
+    const food = db.prepare("SELECT id FROM budget_items WHERE trip_id = ? AND category = 'food'").get(tokyo) as { id: number };
+    const planned = db.prepare("SELECT id FROM budget_items WHERE trip_id = ? AND category = 'transport'").get(tokyo) as { id: number };
+    db.prepare("INSERT INTO budget_item_installments (budget_item_id, label, amount, paid_at) VALUES (?, 'Deposit', 1000, '2026-09-01'), (?, 'Remainder', 2000, NULL), (?, 'Planned', 12000, NULL)")
+      .run(food.id, food.id, planned.id);
+    db.prepare("UPDATE budget_items SET cost_status = 'estimate' WHERE id = ?").run(planned.id);
+    try {
+      const body = costsOverviewResponseSchema.parse((await get(1)).body);
+      expect(body.trips.find(t => t.trip_id === tokyo)).toMatchObject({ total: 3000, estimated_total: 12000, open_total: 14000, display_open_total: 93.33 });
+      expect(body.open_total).toBe(93.33);
+      getRates.mockResolvedValue(null);
+      const unconverted = costsOverviewResponseSchema.parse((await get(1)).body);
+      expect(unconverted.trips.find(t => t.trip_id === tokyo)).toMatchObject({ open_total: 14000, display_open_total: null });
+      expect(unconverted.open_total).toBe(0);
+    } finally {
+      db.prepare('DELETE FROM budget_item_installments WHERE budget_item_id IN (?, ?)').run(food.id, planned.id);
+      db.prepare("UPDATE budget_items SET cost_status = 'final' WHERE id = ?").run(planned.id);
     }
   });
 

@@ -6,7 +6,7 @@ import {
 } from '../../nest-mcp';
 import { McpToolGuardsService } from '../mcp-shared/mcp-tool-guards.service';
 import { z } from 'zod';
-import { COST_CATEGORIES, costStatusSchema, type CostStatus } from '@trek/shared';
+import { COST_CATEGORIES, budgetInstallmentInputSchema, costStatusSchema, type BudgetInstallmentInput, type CostStatus } from '@trek/shared';
 import { RuntimeEnvService } from '../app-config/runtime-env.service';
 import { isDemoUserId } from '../common/demo-write';
 import { ADDON_IDS } from '../../addons';
@@ -14,6 +14,7 @@ import { noAccess, permissionDenied } from '../../mcp/tools/_shared';
 import { TripMembershipService } from '../trip-membership/trip-membership.service';
 import { DatabaseService } from '../database/database.service';
 import { BudgetService } from './budget.service';
+import { InstallmentAllocationError, InstallmentsExceedTotalError } from './budget-installments';
 import { ExchangeRatesService } from './exchange-rates.service';
 import { addonGate } from '../addons/addon-gate';
 import { AddonsService } from '../addons/addons.service';
@@ -36,6 +37,19 @@ const costStatusInput = costStatusSchema.describe('"estimate" for a planned cost
 
 /** Reusable Zod shape for the category, naming the keys the Costs tab groups by (#4). */
 const categoryInput = z.string().max(100).describe(`Cost category key: one of ${COST_CATEGORIES.join(', ')}, or custom:<id> for a custom category (list_cost_categories). Any other text is shown as "other".`);
+
+/** Reusable Zod shape for the partial payments of an expense (fork #6), with the rules the model has to know. */
+const installmentsInput = z.array(z.strictObject(budgetInstallmentInputSchema.shape)).describe('Partial payments of this expense over time, e.g. a deposit and the remainder, in the expense currency. Each: label, amount (> 0), due_date and paid_at as YYYY-MM-DD (paid_at null = still open). The amounts may add up to at most the expense total. Installments only record when money moves; they never change the settlement.');
+
+/** The installment rule surfaces as the tool's error text, like every other refusal here. */
+async function refuseOverfullInstallments<T>(write: () => Promise<T> | T): Promise<T | ReturnType<typeof errorResult>> {
+  try {
+    return await write();
+  } catch (err) {
+    if (err instanceof InstallmentsExceedTotalError || err instanceof InstallmentAllocationError) return errorResult(err.message);
+    throw err;
+  }
+}
 
 /** Reusable Zod shape for an unequal split: what each participant owes. Signed, like the REST contract (#2176). */
 const splitMembersSchema = z.array(z.strictObject({
@@ -198,17 +212,18 @@ export class BudgetMcp {
       place_id: z.number().int().positive().optional().describe('Place on this trip the expense belongs to (the museum ticket for that museum), linking it in the planner'),
       note: z.string().max(500).optional(),
       cost_status: costStatusInput.optional(),
+      installments: installmentsInput.optional(),
     },
     annotations: TOOL_ANNOTATIONS_NON_IDEMPOTENT,
     when: budgetAddonOn,
     access: { group: 'budget', mode: 'write' },
   })
   async createBudgetItem(
-    { tripId, name, category, total_price, currency, member_ids, members, payers, expense_date, place_id, note, cost_status }: {
+    { tripId, name, category, total_price, currency, member_ids, members, payers, expense_date, place_id, note, cost_status, installments }: {
       tripId: number; name: string; category?: string; total_price: number; currency?: string | null;
       member_ids?: number[]; members?: { user_id: number; amount: number }[];
       payers?: { user_id: number; amount: number }[]; expense_date?: string | null; place_id?: number; note?: string;
-      cost_status?: CostStatus;
+      cost_status?: CostStatus; installments?: BudgetInstallmentInput[];
     },
     ctx: McpContext,
   ) {
@@ -224,11 +239,12 @@ export class BudgetMcp {
     // The split participants are the members of an uneven split; the equal-split
     // list still carries them so the row's `persons` count comes out the same.
     const splitIds = members ? members.map(m => m.user_id) : this.resolveMemberIds(tripId, member_ids);
-    const itemData = { category, name, total_price, currency, member_ids: splitIds, members, payers, expense_date, place_id, note, cost_status };
+    const itemData = { category, name, total_price, currency, member_ids: splitIds, members, payers, expense_date, place_id, note, cost_status, installments };
     // Freeze the live FX rate at entry time so a settled position isn't re-opened
     // when live rates drift (#1445) — same as the REST create path.
     await this.budget.freezeForeignRate(tripId, itemData);
-    const item = this.budget.createBudgetItem(tripId, itemData);
+    const item = await refuseOverfullInstallments(() => this.budget.createBudgetItem(tripId, itemData));
+    if ('isError' in item) return item;
     this.guards.safeBroadcast(tripId, 'budget:created', { item });
     return ok({ item });
   }
@@ -274,17 +290,18 @@ export class BudgetMcp {
       expense_date: z.string().max(40).nullable().optional().describe('Date the expense occurred, YYYY-MM-DD; null clears it. Omit to leave unchanged.'),
       note: z.string().max(500).nullable().optional(),
       cost_status: costStatusInput.optional().describe('Switch between "estimate" (planned, kept out of the settlement) and "final" (the real cost). Turning an estimate final keeps its amount; send total_price too if the real cost differs. Omit to leave unchanged.'),
+      installments: installmentsInput.optional().describe('Replaces the installments as a whole: send every installment the expense should keep, with the `id` of an existing one to keep that row; one left out is deleted, [] removes all. Omit to leave unchanged. To only mark one paid, use set_budget_installment_paid. A total_price lowered below the installments is refused.'),
     },
     annotations: TOOL_ANNOTATIONS_WRITE,
     when: budgetAddonOn,
     access: { group: 'budget', mode: 'write' },
   })
   async updateBudgetItem(
-    { tripId, itemId, name, category, total_price, currency, member_ids, members, payers, persons, days, expense_date, note, cost_status }: {
+    { tripId, itemId, name, category, total_price, currency, member_ids, members, payers, persons, days, expense_date, note, cost_status, installments }: {
       tripId: number; itemId: number; name?: string; category?: string; total_price?: number; currency?: string | null;
       member_ids?: number[]; members?: { user_id: number; amount: number }[];
       payers?: { user_id: number; amount: number }[]; persons?: number | null; days?: number | null;
-      expense_date?: string | null; note?: string | null; cost_status?: CostStatus;
+      expense_date?: string | null; note?: string | null; cost_status?: CostStatus; installments?: BudgetInstallmentInput[];
     },
     ctx: McpContext,
   ) {
@@ -302,8 +319,9 @@ export class BudgetMcp {
     }
     // Freeze-then-write composite: a currency change re-freezes the rate at entry
     // time (#1445) on the same code path the REST update uses.
-    const item = await this.budget.update(itemId, tripId, { name, category, total_price, currency, member_ids, members, payers, persons, days, expense_date, note, cost_status });
+    const item = await refuseOverfullInstallments(() => this.budget.update(itemId, tripId, { name, category, total_price, currency, member_ids, members, payers, persons, days, expense_date, note, cost_status, installments }));
     if (!item) return errorResult('Budget item not found.');
+    if ('isError' in item) return item;
     this.guards.safeBroadcast(tripId, 'budget:updated', { item });
     return ok({ item });
   }
@@ -367,7 +385,13 @@ export class BudgetMcp {
     if (this.isDemoUser(ctx.userId)) return demoDenied();
     if (!this.budget.verifyTripAccess(tripId, ctx.userId)) return noAccess();
     if (!this.guards.hasTripPermission('budget_edit', tripId, ctx.userId)) return permissionDenied();
-    const result = this.budget.updateMembers(itemId, tripId, userIds);
+    let result: ReturnType<BudgetService['updateMembers']>;
+    try {
+      result = this.budget.updateMembers(itemId, tripId, userIds);
+    } catch (err) {
+      if (err instanceof InstallmentAllocationError || err instanceof InstallmentsExceedTotalError) return errorResult(err.message);
+      throw err;
+    }
     if (!result) return errorResult('Budget item not found.');
     const item = this.budget.getBudgetItem(itemId, tripId);
     this.guards.safeBroadcast(tripId, 'budget:members-updated', { itemId, members: result.members, persons: result.item.persons });
@@ -394,6 +418,32 @@ export class BudgetMcp {
     const member = this.budget.toggleMemberPaid(itemId, tripId, memberId, paid);
     this.guards.safeBroadcast(tripId, 'budget:member-paid-updated', { itemId, userId: memberId, paid: paid ? 1 : 0 });
     return ok({ member });
+  }
+
+  @Tool({
+    name: 'set_budget_installment_paid',
+    description: 'Mark one installment (a partial payment such as a deposit or the remainder) of a budget item as paid on a day, or as open again. The installment ids come with the item (list the budget or read the trip-budget resource). This only records when the money moved; it never changes the settlement.',
+    inputSchema: {
+      tripId: z.number().int().positive(),
+      itemId: z.number().int().positive(),
+      installmentId: z.number().int().positive(),
+      paid_at: z.iso.date().nullable().describe('The day it was paid, YYYY-MM-DD; null marks it open again'),
+    },
+    annotations: TOOL_ANNOTATIONS_WRITE,
+    when: budgetAddonOn,
+    access: { group: 'budget', mode: 'write' },
+  })
+  async setBudgetInstallmentPaid(
+    { tripId, itemId, installmentId, paid_at }: { tripId: number; itemId: number; installmentId: number; paid_at: string | null },
+    ctx: McpContext,
+  ) {
+    if (this.isDemoUser(ctx.userId)) return demoDenied();
+    if (!this.budget.verifyTripAccess(tripId, ctx.userId)) return noAccess();
+    if (!this.guards.hasTripPermission('budget_edit', tripId, ctx.userId)) return permissionDenied();
+    const item = this.budget.setInstallmentPaid(itemId, tripId, installmentId, paid_at);
+    if (!item) return errorResult('Installment not found.');
+    this.guards.safeBroadcast(tripId, 'budget:updated', { item });
+    return ok({ item });
   }
 
   // --- SETTLEMENTS (settle-up payments between members) ---

@@ -168,6 +168,10 @@ export const costsOverviewTripSchema = z.object({
   estimated_total: z.number(),
   /** Estimate in display currency, or null without an exchange rate. */
   estimated_display_total: z.number().nullable(),
+  /** Still to be paid, in the trip currency. Includes planned installments of estimates. */
+  open_total: z.number(),
+  /** Still to be paid in the display currency, or null without an exchange rate. */
+  display_open_total: z.number().nullable(),
   /** Categories with at least one expense of either status: fixed keys, then custom keys in sort order. */
   categories: z.array(costsOverviewTripCategorySchema),
   people: z.array(costsOverviewShareSchema),
@@ -193,6 +197,8 @@ export const costsOverviewResponseSchema = z.object({
   total: z.number(),
   estimated_total: z.number(),
   categories: z.array(costsOverviewCategoryTotalSchema),
+  /** Open installments across converted trips, in the display currency. */
+  open_total: z.number(),
   /** Each person's share across all converted trips, in the display currency. */
   people: z.array(costsOverviewGlobalShareSchema),
   unassigned: z.number(),

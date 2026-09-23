@@ -25,6 +25,8 @@ import type { TripMember } from '../../../../components/Budget/BudgetPanelMember
 import { ReceiptPreviewModal } from '../../../../components/Budget/ReceiptPreviewModal'
 import type { BudgetItem, BudgetItemReceipt } from '../../../../types'
 import { COST_STATUSES, type CostStatus } from '@trek/shared'
+import { useInstallmentDrafts } from '../../../../components/Budget/useInstallmentDrafts'
+import MCostInstallmentsSection from './MCostInstallmentsSection'
 
 export interface MCostSheetProps {
   tripId: number
@@ -180,8 +182,17 @@ export default function MCostSheet({ tripId, base, people, me, editing, prefill,
 
   const ticketValid = ticketItems.length > 0 && ticketItems.every(item => item.name.trim().length > 0 && (Number.parseFloat(item.price) || 0) > 0 && item.participants.size > 0)
   const payersOk = !multiPayer || (payerIds.size > 0 && payersBalanced(payerAmounts, payerIds, totalNum))
+  const fullShares = useMemo(() => {
+    const ids = splitMode === 'ticket'
+      ? [...new Set([...participants, ...Object.keys(ticketInfo.shares).map(Number)])]
+      : [...participants]
+    return Object.fromEntries(ids.map(id => [id, splitMode === 'custom'
+      ? (Number.parseFloat(customAmounts[id]) || 0)
+      : splitMode === 'ticket' ? (ticketInfo.shares[id] || 0) : (equalShares[id] || 0)]))
+  }, [splitMode, participants, ticketInfo.shares, customAmounts, equalShares])
+  const installments = useInstallmentDrafts(editing, totalNum, fullShares)
   // A negative total is a valid entry (a refund, #2176); only zero has nothing to say.
-  const valid = name.trim().length > 0 && payersOk && (
+  const valid = !installments.exceeds && !installments.invalidSplit && name.trim().length > 0 && payersOk && (
     isTicketMode
       ? ticketValid
       : totalNum !== 0 && (participants.size === 0 || splitMode === 'equally' || customBalanced)
@@ -274,7 +285,10 @@ export default function MCostSheet({ tripId, base, people, me, editing, prefill,
     const payerList = multiPayer
       ? [...payerIds].map(id => ({ user_id: id, amount: Number.parseFloat(payerAmounts[id]) || 0 })).filter(p => p.amount !== 0)
       : payerId > 0 ? [{ user_id: payerId, amount: totalNum }] : []
-    const memberList = [...participants].map(id => ({
+    const memberIds = splitMode === 'ticket'
+      ? [...new Set([...participants, ...Object.keys(ticketInfo.shares).map(Number)])].sort((a, b) => a - b)
+      : [...participants]
+    const memberList = memberIds.map(id => ({
       user_id: id,
       amount: splitMode === 'custom'
         ? (Number.parseFloat(customAmounts[id]) || 0)
@@ -288,12 +302,13 @@ export default function MCostSheet({ tripId, base, people, me, editing, prefill,
       currency,
       payers: payerList,
       members: memberList,
-      member_ids: [...participants],
+      member_ids: memberIds,
       expense_date: day || null,
       total_price: totalNum,
       cost_status: costStatus,
       note: note.trim() || null,
       ticket_json: splitMode === 'ticket' ? writeTicketItems(ticketItems) : null,
+      ...installments.payload,
       ...(!editing && prefill?.reservationId ? { reservation_id: prefill.reservationId } : {}),
       ...(!editing && prefill?.placeId ? { place_id: prefill.placeId } : {}),
     }
@@ -684,6 +699,7 @@ export default function MCostSheet({ tripId, base, people, me, editing, prefill,
             </div>
           </>
         )}
+        <MCostInstallmentsSection state={installments} currency={currency} total={totalNum} people={people.map(p => ({ id: p.id, name: nameOf(p) }))} fullShares={fullShares} />
 
         {/* NOTE — last, because it is the one field that is never required. The
             room for it came from folding the category pills into a dropdown. */}

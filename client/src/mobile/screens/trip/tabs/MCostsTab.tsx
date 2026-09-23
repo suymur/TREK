@@ -34,6 +34,8 @@ import {
 } from './costsModel'
 import type { BudgetParticipantFinal } from '@trek/shared'
 import type { BudgetItem, BudgetItemReceipt, TripMember } from '../../../../types'
+import { DuePaymentsList, useDuePayments } from '../../../../components/Budget/DuePaymentsList'
+import { InstallmentsChip } from '../../../../components/Budget/InstallmentsChip'
 
 type TFn = (key: string, params?: Record<string, string | number>) => string
 
@@ -61,6 +63,7 @@ export default function MCostsTab({ planner, shell }: MTabScreenProps) {
   const cats = useCostCategoryIndex()
   const ctx: CostsCtx = useMemo(() => ({ me, tripCurrency, convert, cats }), [me, tripCurrency, convert, cats])
 
+  const due = useDuePayments(tripId)
   const [settlement, setSettlement] = useState<CostsSettlementResponse | null>(null)
   // A failed settlement read leaves `settlement` null, and the final budget would
   // read that as "the trip cost nobody anything", a claim we cannot make.
@@ -246,6 +249,16 @@ export default function MCostsTab({ planner, shell }: MTabScreenProps) {
           <div className="flex-none font-geist text-[0.9375rem] font-extrabold tabular-nums" style={{ color: STATUS_COLOR.pending }}>
             {formatMoney(totals.outstanding, base, locale)}
           </div>
+        </div>
+      )}
+
+      {due.hasInstallments && (
+        <div className="mt-2 rounded-2xl border border-[color:var(--m-rowbr)] bg-m-card p-[13px]" data-testid="m-due-payments">
+          <div className="mb-2 flex items-center gap-[7px]">
+            <span className="text-[0.875rem] font-extrabold text-m-ink">{t('installments.due.title')}</span>
+            <CountPill>{due.rows.length}</CountPill>
+          </div>
+          <DuePaymentsList rows={due.rows} markPaid={due.markPaid} canEdit={canEdit} tripCurrency={tripCurrency} />
         </div>
       )}
 
@@ -690,6 +703,7 @@ function ExpenseRow({ item, ctx, base, locale, t, canEdit, onEdit, onDelete, onT
                 {formatMoney(item.total_price, cur, locale)} {'→'} {formatMoney(total, base, locale)}
               </div>
             )}
+            {(item.installments || []).length > 0 && <div className="mt-[4px] flex"><InstallmentsChip item={item} currency={cur} /></div>}
             {members.length > 0 && (
               <div className="mt-[5px] flex flex-wrap gap-1">
                 {members.map(m => (

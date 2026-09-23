@@ -49,11 +49,14 @@ export interface OverviewTripRow extends OverviewSplit {
   estimated: string | null
   estimatedOriginal: string | null
   categories: OverviewCategoryLine[]
+  /** Remaining installments, in display currency or the trip currency when conversion is unavailable. */
+  open: string | null
 }
 
 export interface OverviewTotals extends OverviewSplit {
   amount: string
   estimated: string
+  open: string | null
   categories: ({ category: CostCategoryKey; amount: string; estimated: string } & OverviewSplit)[]
 }
 
@@ -144,6 +147,9 @@ function tripRow(trip: CostsOverviewTrip, display: string, locale: string, colum
     original: trip.item_count > 0 ? inTrip(trip.total, trip.display_total) : null,
     estimated: inDisplay(trip.estimated_display_total),
     estimatedOriginal: trip.estimated_total !== 0 ? inTrip(trip.estimated_total, trip.estimated_display_total) : null,
+    open: trip.open_total > 0
+      ? trip.display_open_total === null ? money(trip.open_total, trip.currency) : money(trip.display_open_total, display)
+      : null,
     categories: trip.categories.map(c => ({
       category: c.category,
       amount: inDisplay(c.display_total),
@@ -166,6 +172,7 @@ export function buildOverviewView(data: CostsOverviewResponse, locale: string): 
     totals: {
       amount: money(data.total, display),
       estimated: money(data.estimated_total, display),
+      open: data.open_total > 0 ? money(data.open_total, display) : null,
       categories: data.categories.map(c => ({
         category: c.category,
         amount: money(c.total, display),

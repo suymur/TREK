@@ -1000,3 +1000,64 @@ describe('Budget tools: estimate / final', () => {
     });
   });
 });
+
+// ---------------------------------------------------------------------------
+// installments (fork #6)
+// ---------------------------------------------------------------------------
+
+describe('Budget tools: installments', () => {
+  const installments = [
+    { label: 'Deposit', amount: 1000, due_date: '2026-10-01', paid_at: '2026-09-20' },
+    { label: 'Remainder', amount: 2000, due_date: '2026-11-01' },
+  ];
+
+  it('creates an expense with installments and marks the remainder paid', async () => {
+    const { user, trip } = tripWithTwo();
+    await withHarness(user.id, async (h) => {
+      const created = parseToolResult(await h.client.callTool({
+        name: 'create_budget_item', arguments: { tripId: trip.id, name: 'Hotel', total_price: 3000, installments },
+      })) as any;
+      expect(created.item).toMatchObject({ paid_amount: 1000, open_amount: 2000 });
+
+      const remainder = created.item.installments[1];
+      const paid = parseToolResult(await h.client.callTool({
+        name: 'set_budget_installment_paid',
+        arguments: { tripId: trip.id, itemId: created.item.id, installmentId: remainder.id, paid_at: '2026-10-30' },
+      })) as any;
+      expect(paid.item).toMatchObject({ paid_amount: 3000, open_amount: 0 });
+
+      const missing = await h.client.callTool({
+        name: 'set_budget_installment_paid',
+        arguments: { tripId: trip.id, itemId: created.item.id, installmentId: 999999, paid_at: null },
+      });
+      expect(missing.isError).toBe(true);
+      expect(errorText(missing)).toBe('Installment not found.');
+    });
+  });
+
+  it('refuses installments over the total on create and a lowered total on update', async () => {
+    const { user, trip } = tripWithTwo();
+    await withHarness(user.id, async (h) => {
+      const over = await h.client.callTool({
+        name: 'create_budget_item', arguments: { tripId: trip.id, name: 'Hotel', total_price: 2500, installments },
+      });
+      expect(over.isError).toBe(true);
+      expect(errorText(over)).toMatch(/installments add up to 3000\.00, more than the expense total of 2500\.00/);
+      expect(itemCount(trip.id)).toBe(0);
+
+      const created = parseToolResult(await h.client.callTool({
+        name: 'create_budget_item', arguments: { tripId: trip.id, name: 'Hotel', total_price: 3000, installments },
+      })) as any;
+      const lowered = await h.client.callTool({
+        name: 'update_budget_item', arguments: { tripId: trip.id, itemId: created.item.id, total_price: 2000 },
+      });
+      expect(lowered.isError).toBe(true);
+      expect(itemRow(created.item.id).total_price).toBe(3000);
+
+      const replaced = parseToolResult(await h.client.callTool({
+        name: 'update_budget_item', arguments: { tripId: trip.id, itemId: created.item.id, installments: [] },
+      })) as any;
+      expect(replaced.item.installments).toEqual([]);
+    });
+  });
+});

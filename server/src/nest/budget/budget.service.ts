@@ -1,12 +1,13 @@
 import { Injectable } from '@nestjs/common';
 import { DatabaseService, type TripAccess } from '../database/database.service';
-import type { BudgetCostTotals, BudgetParticipantFinal, CostStatus, TrekWsPayload, TrekWsTripEventName } from '@trek/shared';
+import type { BudgetCostTotals, BudgetInstallmentInput, BudgetItemInstallment, BudgetParticipantFinal, CostStatus, TrekWsPayload, TrekWsTripEventName } from '@trek/shared';
 import { RealtimeService } from '../realtime/realtime.service';
 import { PermissionsService } from '../permissions/permissions.service';
 import { avatarUrl } from '../common/avatarUrl';
 import type { User, BudgetItem, BudgetItemMember, BudgetItemPayer, BudgetItemReceipt } from '../../types';
 import { ExchangeRatesService } from './exchange-rates.service';
 import { storedExpenseCategory } from '../cost-categories/cost-categories.helpers';
+import { assertInstallmentAllocations, assertInstallmentsFit, installmentAmounts, InstallmentAllocationError } from './budget-installments';
 
 type Trip = TripAccess;
 
@@ -287,6 +288,162 @@ export class BudgetService {
   }
 
   // -------------------------------------------------------------------------
+  // Installments (fork #6)
+  // -------------------------------------------------------------------------
+
+  /** The installments of the given items, each list in its saved order. */
+  private loadInstallmentsByItem(itemIds: number[]): Map<number, BudgetItemInstallment[]> {
+    const byItem = new Map<number, BudgetItemInstallment[]>();
+    if (itemIds.length === 0) return byItem;
+    const rows = this.db.all<BudgetItemInstallment>(`
+      SELECT id, budget_item_id, label, amount, due_date, paid_at, sort_order, created_at
+      FROM budget_item_installments
+      WHERE budget_item_id IN (${itemIds.map(() => '?').join(',')})
+      ORDER BY sort_order ASC, id ASC
+    `, ...itemIds);
+    const memberRows = rows.length === 0 ? [] : this.db.all<{ installment_id: number; user_id: number; amount: number }>(`
+      SELECT installment_id, user_id, amount FROM budget_item_installment_members
+      WHERE installment_id IN (${rows.map(() => '?').join(',')}) ORDER BY user_id
+    `, ...rows.map(r => r.id));
+    const membersByInstallment = new Map<number, { user_id: number; amount: number }[]>();
+    for (const member of memberRows) {
+      const list = membersByInstallment.get(member.installment_id) ?? [];
+      list.push({ user_id: member.user_id, amount: member.amount });
+      membersByInstallment.set(member.installment_id, list);
+    }
+    for (const r of rows) {
+      r.members = membersByInstallment.get(r.id) ?? [];
+      const list = byItem.get(r.budget_item_id);
+      if (list) list.push(r);
+      else byItem.set(r.budget_item_id, [r]);
+    }
+    return byItem;
+  }
+
+  /** Put the installments and the paid / open amounts on an item read from the table. */
+  private attachInstallments<T extends BudgetItem>(item: T, installments?: BudgetItemInstallment[]): T {
+    const list = installments ?? this.loadInstallmentsByItem([item.id]).get(item.id) ?? [];
+    item.installments = list;
+    const { paid_amount, open_amount } = installmentAmounts(item.total_price || 0, list);
+    item.paid_amount = paid_amount;
+    item.open_amount = open_amount;
+    return item;
+  }
+
+  /**
+   * Replace the installments of an item with `inputs`, in their order. A row
+   * carrying the id of one of this item's installments updates that row (an
+   * omitted due_date or paid_at keeps what it had), any other row is new, and
+   * the item's installments the list leaves out are deleted. An id from some
+   * other expense is never adopted: it only ever lands as a new row here.
+   */
+  private writeInstallments(itemId: number | string, inputs: BudgetInstallmentInput[]) {
+    const existing = new Set(
+      this.db.all<{ id: number }>('SELECT id FROM budget_item_installments WHERE budget_item_id = ?', itemId).map(r => r.id),
+    );
+    const kept = new Set(inputs.flatMap(i => (i.id !== undefined && existing.has(i.id) ? [i.id] : [])));
+    const remove = this.db.prepare('DELETE FROM budget_item_installments WHERE id = ?');
+    for (const id of existing) if (!kept.has(id)) remove.run(id);
+
+    const update = this.db.prepare(`
+      UPDATE budget_item_installments SET
+        label = ?, amount = ?, sort_order = ?,
+        due_date = CASE WHEN ? THEN ? ELSE due_date END,
+        paid_at = CASE WHEN ? THEN ? ELSE paid_at END
+      WHERE id = ?
+    `);
+    const insert = this.db.prepare(
+      'INSERT INTO budget_item_installments (budget_item_id, label, amount, due_date, paid_at, sort_order) VALUES (?, ?, ?, ?, ?, ?)',
+    );
+    const removeMembers = this.db.prepare('DELETE FROM budget_item_installment_members WHERE installment_id = ?');
+    const insertMember = this.db.prepare('INSERT INTO budget_item_installment_members (installment_id, user_id, amount) VALUES (?, ?, ?)');
+    const expenseMembers = new Set(this.db.all<{ user_id: number }>(
+      'SELECT user_id FROM budget_item_members WHERE budget_item_id = ?', itemId,
+    ).map(m => m.user_id));
+    const updated = new Set<number>();
+    inputs.forEach((inst, idx) => {
+      const amount = Math.round(inst.amount * 100) / 100;
+      let installmentId: number;
+      // The same id twice would write one row twice and lose the second amount
+      // from the sum check, so a repeat is stored as a row of its own.
+      if (inst.id !== undefined && kept.has(inst.id) && !updated.has(inst.id)) {
+        updated.add(inst.id);
+        update.run(
+          inst.label, amount, idx,
+          inst.due_date !== undefined ? 1 : 0, inst.due_date ?? null,
+          inst.paid_at !== undefined ? 1 : 0, inst.paid_at ?? null,
+          inst.id,
+        );
+        installmentId = inst.id;
+      } else {
+        installmentId = Number(insert.run(itemId, inst.label, amount, inst.due_date ?? null, inst.paid_at ?? null, idx).lastInsertRowid);
+      }
+      if (inst.members !== undefined) {
+        const seen = new Set<number>();
+        // Planning-only expenses have no participant split to allocate against.
+        // For a split expense, an explicit empty list would silently erase its
+        // deposit split; older omitted lists remain readable as legacy rows.
+        if (inst.members.length === 0 && expenseMembers.size > 0) {
+          throw new InstallmentAllocationError('A deposit split needs at least one expense participant.');
+        }
+        for (const member of inst.members) {
+          if (!expenseMembers.has(member.user_id)) throw new InstallmentAllocationError('A deposit participant is not part of the expense split.');
+          if (seen.has(member.user_id)) throw new InstallmentAllocationError('A deposit participant is listed more than once.');
+          seen.add(member.user_id);
+        }
+        removeMembers.run(installmentId);
+        for (const member of inst.members) insertMember.run(installmentId, member.user_id, Math.round(member.amount * 100) / 100);
+      }
+    });
+  }
+
+  /**
+   * The installments of an item may add up to its total_price, never more. Run
+   * last in every write that can move either side (the total comes from the
+   * payers in the same write), so a refusal rolls the whole write back: a
+   * lowered total is refused too, it does not shrink the installments.
+   */
+  private assertItemInstallmentsFit(itemId: number | string) {
+    const row = this.db.get<{ total_price: number }>('SELECT total_price FROM budget_items WHERE id = ?', itemId);
+    const amounts = this.db.all<{ amount: number }>('SELECT amount FROM budget_item_installments WHERE budget_item_id = ?', itemId).map(r => r.amount);
+    assertInstallmentsFit(row?.total_price ?? 0, amounts);
+    this.assertItemInstallmentAllocations(itemId, row?.total_price ?? 0);
+  }
+
+  private assertItemInstallmentAllocations(itemId: number | string, total: number): void {
+    const members = this.db.all<{ user_id: number; amount: number | null }>(
+      'SELECT user_id, amount FROM budget_item_members WHERE budget_item_id = ? ORDER BY user_id', itemId,
+    );
+    const fullShares = new Map<number, number>();
+    const totalCents = Math.round(total * 100);
+    const hasCustom = members.some(m => m.amount !== null);
+    const equal = hasCustom ? {} : splitEqualShares(totalCents, members, Number(itemId));
+    for (const member of members) {
+      fullShares.set(member.user_id, hasCustom ? Math.round((member.amount ?? 0) * 100) : (equal[member.user_id] ?? 0));
+    }
+    const installments = this.loadInstallmentsByItem([Number(itemId)]).get(Number(itemId)) ?? [];
+    assertInstallmentAllocations(fullShares, installments);
+  }
+
+  /**
+   * Mark one installment paid on a given day, or open again with null. Null
+   * when the installment is not one of this item's or the item is not on the
+   * trip. Returns the whole item, so the caller can broadcast it as it stands.
+   */
+  setInstallmentPaid(itemId: string | number, tripId: string | number, installmentId: string | number, paidAt: string | null): BudgetItem | null {
+    return this.db.transaction(() => {
+      const row = this.db.get(`
+        SELECT i.id FROM budget_item_installments i
+        JOIN budget_items b ON b.id = i.budget_item_id
+        WHERE i.id = ? AND i.budget_item_id = ? AND b.trip_id = ?
+      `, installmentId, itemId, tripId);
+      if (!row) return null;
+      this.db.run('UPDATE budget_item_installments SET paid_at = ? WHERE id = ?', paidAt, installmentId);
+      return this.getBudgetItem(itemId, tripId);
+    });
+  }
+
+  // -------------------------------------------------------------------------
   // CRUD
   // -------------------------------------------------------------------------
 
@@ -366,10 +523,12 @@ export class BudgetService {
       }
     }
 
+    const installmentsByItem = this.loadInstallmentsByItem(itemIds);
     items.forEach(item => {
       item.members = membersByItem[item.id] || [];
       item.payers = payersByItem[item.id] || [];
       item.receipts = receiptsByItem[item.id] || [];
+      this.attachInstallments(item, installmentsByItem.get(item.id) || []);
     });
     return items;
   }
@@ -496,6 +655,7 @@ export class BudgetService {
       reservation_id?: number | null;
       place_id?: number | null;
       receipt_file_ids?: number[];
+      installments?: BudgetInstallmentInput[];
     },
   ) {
     return this.db.transaction(() => {
@@ -565,11 +725,16 @@ export class BudgetService {
         }
       }
 
+      if (data.installments && data.installments.length > 0) {
+        this.writeInstallments(itemId, data.installments);
+        this.assertItemInstallmentsFit(itemId);
+      }
+
       const item = this.db.get<BudgetItem>('SELECT * FROM budget_items WHERE id = ?', itemId)!;
       item.members = this.loadItemMembers(itemId);
       item.payers = this.loadItemPayers(itemId);
       item.receipts = this.loadItemReceipts(itemId);
-      return item;
+      return this.attachInstallments(item);
     });
   }
 
@@ -580,7 +745,7 @@ export class BudgetService {
     item.members = this.loadItemMembers(id);
     item.payers = this.loadItemPayers(id);
     item.receipts = this.loadItemReceipts(id);
-    return item;
+    return this.attachInstallments(item);
   }
 
   linkBudgetItemToReservation(
@@ -605,6 +770,7 @@ export class BudgetService {
       ticket_json?: string | null;
       cost_status?: CostStatus;
       receipt_file_ids?: number[];
+      installments?: BudgetInstallmentInput[];
     },
   ) {
     return this.db.transaction(() => {
@@ -719,11 +885,16 @@ export class BudgetService {
         }
       }
 
+      if (data.installments !== undefined) this.writeInstallments(id, data.installments);
+      // Also when only the total or the payers moved: lowering the total under
+      // the installments is refused, not absorbed.
+      this.assertItemInstallmentsFit(id);
+
       const updated = this.db.get<BudgetItem>('SELECT * FROM budget_items WHERE id = ?', id)!;
       updated.members = this.loadItemMembers(id);
       updated.payers = this.loadItemPayers(id);
       updated.receipts = this.loadItemReceipts(id);
-      return updated;
+      return this.attachInstallments(updated);
     });
   }
 
@@ -736,10 +907,11 @@ export class BudgetService {
       const item = this.db.get('SELECT id FROM budget_items WHERE id = ? AND trip_id = ?', id, tripId);
       if (!item) return null;
       this.writeItemPayers(id, tripId, payers);
+      this.assertItemInstallmentsFit(id);
       const updated = this.db.get<BudgetItem>('SELECT * FROM budget_items WHERE id = ?', id)!;
       updated.members = this.loadItemMembers(id);
       updated.payers = this.loadItemPayers(id);
-      return updated;
+      return this.attachInstallments(updated);
     });
   }
 
@@ -816,9 +988,11 @@ export class BudgetService {
       }
 
       // loadItemMembers already applies avatar_url — the legacy second .map was redundant.
+      this.assertItemInstallmentsFit(id);
       const members = this.loadItemMembers(id);
       const updated = this.db.get<BudgetItem>('SELECT * FROM budget_items WHERE id = ?', id)!;
-      return { members, item: updated };
+      updated.members = members;
+      return { members, item: this.attachInstallments(updated) };
     });
   }
 
@@ -832,6 +1006,16 @@ export class BudgetService {
         return;
       }
 
+      // A deleted participant cannot retain a deposit allocation. Clear the
+      // whole affected deposit split, leaving that installment unallocated for
+      // the remaining participants to divide explicitly later.
+      const affectedDeposits = this.db.all<{ installment_id: number }>(
+        'SELECT DISTINCT installment_id FROM budget_item_installment_members WHERE user_id = ?', userId,
+      );
+      for (const { installment_id } of affectedDeposits) {
+        this.db.run('DELETE FROM budget_item_installment_members WHERE installment_id = ?', installment_id);
+      }
+
       this.db.run('DELETE FROM budget_item_members WHERE user_id = ?', userId);
 
       const remaining = this.db.prepare('SELECT COUNT(*) AS count FROM budget_item_members WHERE budget_item_id = ?');
@@ -839,6 +1023,7 @@ export class BudgetService {
       for (const itemId of itemIds) {
         const { count } = remaining.get(itemId) as { count: number };
         setPersons.run(count || null, itemId);
+        this.assertItemInstallmentsFit(itemId);
       }
     });
   }

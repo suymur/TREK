@@ -157,7 +157,7 @@ describe('buildCostsOverview', () => {
     const out = buildCostsOverview([trip(1, null, { is_archived: 1, start_date: null, end_date: null })], [], [], 'EUR', null);
     expect(out.trips[0]).toEqual({
       trip_id: 1, title: 'Trip 1', start_date: null, end_date: null, currency: 'EUR', is_archived: true,
-      item_count: 0, total: 0, display_total: 0, estimated_total: 0, estimated_display_total: 0, categories: [],
+      item_count: 0, total: 0, display_total: 0, estimated_total: 0, estimated_display_total: 0, open_total: 0, display_open_total: 0, categories: [],
       people: [], unassigned: { total: 0, display_total: 0 },
     });
     expect(out.categories).toEqual([]);

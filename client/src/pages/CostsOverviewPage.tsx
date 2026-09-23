@@ -162,7 +162,7 @@ function OverviewTable({ view, byCategory, perPerson, onOpen, t }: {
               <th scope="row" className="px-4 py-3 text-left font-semibold text-content">{t('costsOverview.allTrips')}</th>
               <td />
               <SplitCells split={view.totals} cols={cols} strong />
-              <td className="px-4 py-3"><Amount amount={view.totals.amount} original={null} t={t} strong /></td>
+              <td className="px-4 py-3"><Amount amount={view.totals.amount} original={null} t={t} strong />{view.totals.open && <div className="text-xs text-warning">{t('installments.openAmount', { amount: view.totals.open })}</div>}</td>
               <td className="px-4 py-3"><Amount amount={view.totals.estimated} original={null} t={t} strong /></td>
             </tr>
             {byCategory && view.totals.categories.map(c => (
@@ -213,7 +213,7 @@ function TripRows({ row, byCategory, cols, onOpen, t }: {
         </td>
         <td className="px-4 py-3 text-right tabular-nums text-content-muted">{row.itemCount}</td>
         <SplitCells split={row} cols={cols} strong />
-        <td className="px-4 py-3"><Amount amount={row.amount} original={row.original} t={t} strong /></td>
+        <td className="px-4 py-3"><Amount amount={row.amount} original={row.original} t={t} strong />{row.open && <div className="text-xs text-warning">{t('installments.openAmount', { amount: row.open })}</div>}</td>
         <td className="px-4 py-3"><Amount amount={row.estimated} original={row.estimatedOriginal} t={t} strong /></td>
       </tr>
       {byCategory && row.categories.map(c => (
