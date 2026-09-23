@@ -195,7 +195,7 @@ function DialogFooter({ t, canSave, onSave, onCancel, onDelete }: {
         type="button"
         disabled={!canSave}
         onClick={onSave}
-        className="rounded-lg bg-accent px-4 py-2 text-sm font-semibold text-accent-on disabled:opacity-50"
+        className="rounded-lg bg-accent px-4 py-2 text-sm font-semibold text-accent-text disabled:cursor-not-allowed disabled:bg-surface-tertiary disabled:text-content-secondary"
       >
         {t('common.save')}
       </button>

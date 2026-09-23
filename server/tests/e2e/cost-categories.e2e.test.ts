@@ -251,8 +251,9 @@ describe('Custom cost categories e2e (real auth guard + temp SQLite)', () => {
 
   it('sends the new list to every online user but not to the sending socket', async () => {
     ws.getOnlineUserIds.mockReturnValue(new Set([ADMIN, OTHER]));
-    const res = await as(CREATOR)
+    const res = await request(server)
       .post('/api/costs/categories')
+      .set('Cookie', sessionCookie(CREATOR))
       .set('X-Socket-Id', '42')
       .send({ name: 'Deko', icon: 'tag', color: '#000000' });
     expect(res.status).toBe(201);

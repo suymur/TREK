@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import userEvent from '@testing-library/user-event'
+import { act } from '@testing-library/react'
 import { http, HttpResponse } from 'msw'
 import { render, screen, waitFor } from '../../../tests/helpers/render'
 import { server } from '../../../tests/helpers/msw/server'
@@ -53,6 +54,24 @@ describe('CostCategoryPickerActions + CostCategoryDialog (#4)', () => {
     renderPicker()
     await userEvent.click(screen.getByRole('button', { name: 'New category' }))
     expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled()
+  })
+
+  it('uses readable theme text for disabled create and enabled edit actions', async () => {
+    renderPicker()
+    const user = userEvent.setup()
+    await user.click(screen.getByRole('button', { name: 'New category' }))
+    const save = screen.getByRole('button', { name: 'Save' })
+    expect(save).toBeDisabled()
+    expect(save).toHaveClass('disabled:bg-surface-tertiary', 'disabled:text-content-secondary')
+    await user.type(screen.getByPlaceholderText('e.g. Decoration'), 'Deko')
+    expect(save).toBeEnabled()
+    expect(save).toHaveClass('bg-accent', 'text-accent-text')
+
+    await user.click(screen.getByRole('button', { name: 'Cancel' }))
+    act(() => useCostCategoryStore.setState({ categories: [deko] }))
+    renderPicker('custom:5')
+    await user.click(screen.getByRole('button', { name: 'Edit category' }))
+    expect(screen.getByRole('button', { name: 'Save' })).toHaveClass('bg-accent', 'text-accent-text')
   })
 
   it('tells the user when the name is taken', async () => {
