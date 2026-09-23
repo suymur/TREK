@@ -4,6 +4,8 @@ const costsOverview: TranslationStrings = {
   'costsOverview.nav': 'Masraflar',
   'costsOverview.title': 'Masraf özeti',
   'costsOverview.subtitle': 'Tüm seyahatlerin, {currency} cinsinden toplandı',
+  'costsOverview.perPerson': 'Kişi başı ({count})',
+  'costsOverview.unassigned': 'Atanmamış',
   'costsOverview.byCategory': 'Kategoriye göre',
   'costsOverview.trip': 'Seyahat',
   'costsOverview.expenses': 'Harcamalar',

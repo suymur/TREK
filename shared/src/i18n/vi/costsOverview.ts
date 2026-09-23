@@ -4,6 +4,8 @@ const costsOverview: TranslationStrings = {
   'costsOverview.nav': 'Chi phí',
   'costsOverview.title': 'Tổng quan chi phí',
   'costsOverview.subtitle': 'Tất cả chuyến đi của bạn, cộng dồn theo {currency}',
+  'costsOverview.perPerson': 'Theo người ({count})',
+  'costsOverview.unassigned': 'Chưa phân bổ',
   'costsOverview.byCategory': 'Theo danh mục',
   'costsOverview.trip': 'Chuyến đi',
   'costsOverview.expenses': 'Khoản chi',

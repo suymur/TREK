@@ -4,6 +4,8 @@ const costsOverview: TranslationStrings = {
   'costsOverview.nav': 'Költségek',
   'costsOverview.title': 'Költségáttekintés',
   'costsOverview.subtitle': 'Az összes utazásod, {currency} pénznemben összesítve',
+  'costsOverview.perPerson': 'Személyenként ({count})',
+  'costsOverview.unassigned': 'Nincs hozzárendelve',
   'costsOverview.byCategory': 'Kategóriánként',
   'costsOverview.trip': 'Utazás',
   'costsOverview.expenses': 'Kiadások',

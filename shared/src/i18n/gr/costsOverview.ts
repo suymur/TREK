@@ -4,6 +4,8 @@ const costsOverview: TranslationStrings = {
   'costsOverview.nav': 'Έξοδα',
   'costsOverview.title': 'Επισκόπηση εξόδων',
   'costsOverview.subtitle': 'Όλα τα ταξίδια σας, αθροισμένα σε {currency}',
+  'costsOverview.perPerson': 'Ανά άτομο ({count})',
+  'costsOverview.unassigned': 'Χωρίς ανάθεση',
   'costsOverview.byCategory': 'Ανά κατηγορία',
   'costsOverview.trip': 'Ταξίδι',
   'costsOverview.expenses': 'Δαπάνες',

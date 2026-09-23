@@ -4,6 +4,8 @@ const costsOverview: TranslationStrings = {
   'costsOverview.nav': '費用',
   'costsOverview.title': '費用の概要',
   'costsOverview.subtitle': 'すべての旅行を {currency} で合計',
+  'costsOverview.perPerson': '人ごと ({count})',
+  'costsOverview.unassigned': '未割り当て',
   'costsOverview.byCategory': 'カテゴリ別',
   'costsOverview.trip': '旅行',
   'costsOverview.expenses': '支出',

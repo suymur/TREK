@@ -4,6 +4,8 @@ const costsOverview: TranslationStrings = {
   'costsOverview.nav': 'Gastos',
   'costsOverview.title': 'Resumen de gastos',
   'costsOverview.subtitle': 'Todos tus viajes, sumados en {currency}',
+  'costsOverview.perPerson': 'Por persona ({count})',
+  'costsOverview.unassigned': 'Sin asignar',
   'costsOverview.byCategory': 'Por categoría',
   'costsOverview.trip': 'Viaje',
   'costsOverview.expenses': 'Gastos',

@@ -4,6 +4,8 @@ const costsOverview: TranslationStrings = {
   'costsOverview.nav': 'Biaya',
   'costsOverview.title': 'Ringkasan biaya',
   'costsOverview.subtitle': 'Semua perjalananmu, dijumlahkan dalam {currency}',
+  'costsOverview.perPerson': 'Per orang ({count})',
+  'costsOverview.unassigned': 'Belum ditetapkan',
   'costsOverview.byCategory': 'Per kategori',
   'costsOverview.trip': 'Perjalanan',
   'costsOverview.expenses': 'Pengeluaran',

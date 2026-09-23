@@ -84,12 +84,53 @@ export function resolveCostCategory(category: string | null | undefined): CostCa
 
 const costCategorySchema = z.enum(COST_CATEGORIES);
 
+/**
+ * One person's share of a figure (a trip, or one category of a trip): the sum of
+ * their shares of each expense, split like the trip's Costs tab (a custom member
+ * amount, otherwise the equal whole-cent split). Only people with a share in that
+ * figure are listed; a person who is absent took no part in it.
+ */
+export const costsOverviewShareSchema = z.object({
+  user_id: idSchema,
+  /** In the trip currency. */
+  total: z.number(),
+  /** In the display currency; null when the trip had no exchange rate. */
+  display_total: z.number().nullable(),
+});
+export type CostsOverviewShare = z.infer<typeof costsOverviewShareSchema>;
+
+/**
+ * The part of a figure no participant carries: expenses without members, plus
+ * whatever custom member amounts leave uncovered. People + unassigned = total,
+ * to the cent, in both currencies.
+ */
+export const costsOverviewUnassignedSchema = z.object({
+  total: z.number(),
+  display_total: z.number().nullable(),
+});
+
+/** Someone who takes part in at least one expense of the listed trips. */
+export const costsOverviewPersonSchema = z.object({
+  user_id: idSchema,
+  username: z.string(),
+  avatar_url: z.string().nullable(),
+});
+export type CostsOverviewPerson = z.infer<typeof costsOverviewPersonSchema>;
+
+/** One person's global share, in the display currency. */
+export const costsOverviewGlobalShareSchema = z.object({
+  user_id: idSchema,
+  total: z.number(),
+});
+
 /** One category of one trip: the amount in the trip currency and in the display currency. */
 export const costsOverviewTripCategorySchema = z.object({
   category: costCategorySchema,
   total: z.number(),
   /** null when no exchange rate from the trip currency to the display currency was available. */
   display_total: z.number().nullable(),
+  people: z.array(costsOverviewShareSchema),
+  unassigned: costsOverviewUnassignedSchema,
 });
 export type CostsOverviewTripCategory = z.infer<typeof costsOverviewTripCategorySchema>;
 
@@ -107,6 +148,8 @@ export const costsOverviewTripSchema = z.object({
   display_total: z.number().nullable(),
   /** Categories with at least one expense, in COST_CATEGORIES order. */
   categories: z.array(costsOverviewTripCategorySchema),
+  people: z.array(costsOverviewShareSchema),
+  unassigned: costsOverviewUnassignedSchema,
 });
 export type CostsOverviewTrip = z.infer<typeof costsOverviewTripSchema>;
 
@@ -114,6 +157,8 @@ export type CostsOverviewTrip = z.infer<typeof costsOverviewTripSchema>;
 export const costsOverviewCategoryTotalSchema = z.object({
   category: costCategorySchema,
   total: z.number(),
+  people: z.array(costsOverviewGlobalShareSchema),
+  unassigned: z.number(),
 });
 export type CostsOverviewCategoryTotal = z.infer<typeof costsOverviewCategoryTotalSchema>;
 
@@ -124,6 +169,11 @@ export const costsOverviewResponseSchema = z.object({
   /** Sum of every trip `display_total`; trips without a rate are left out. */
   total: z.number(),
   categories: z.array(costsOverviewCategoryTotalSchema),
+  /** Each person's share across all converted trips, in the display currency. */
+  people: z.array(costsOverviewGlobalShareSchema),
+  unassigned: z.number(),
+  /** Everyone with a share in any listed trip, sorted by name — the per-person columns. */
+  participants: z.array(costsOverviewPersonSchema),
   /** Trips whose total could not be converted and is missing from the global figures. */
   unconverted_trip_ids: z.array(idSchema),
 });

@@ -3,8 +3,9 @@ import { ArrowLeft, ChevronRight } from 'lucide-react'
 import type { CostCategory } from '@trek/shared'
 import { useTranslation } from '../../../i18n'
 import { useCostsOverview } from '../../../pages/costs/useCostsOverview'
-import type { OverviewTripRow } from '../../../pages/costs/costsOverviewModel'
+import type { OverviewPersonColumn, OverviewSplit, OverviewTripRow } from '../../../pages/costs/costsOverviewModel'
 import { COST_CAT_META } from '../../../components/Budget/costsCategories'
+import RingAvatar from '../../../components/Budget/BudgetPanelRingAvatar'
 import MGlassBar from '../../components/MGlassBar'
 import MIconBtn from '../../components/MIconBtn'
 import MToggle from '../../components/MToggle'
@@ -13,14 +14,16 @@ import MDancingTrek from '../../components/MDancingTrek'
 type T = (key: string, params?: Record<string, string | number>) => string
 
 /**
- * Phone screen of the cost overview (/costs, #2): the global total first, then one
- * card row per trip. Data, the "by category" switch and navigation come from the
+ * Phone screen of the cost overview (/costs, #2): the two switches, the global
+ * total, then one card row per trip. "Per person" lists each participant under
+ * every figure instead of the desktop's columns. Data, the "by category" switch and navigation come from the
  * same useCostsOverview hook the desktop page wires up; only the markup differs.
  */
 export default function MCostsOverview() {
   const { t } = useTranslation()
   const navigate = useNavigate()
-  const { status, view, byCategory, setByCategory, retry, openTrip } = useCostsOverview()
+  const { status, view, byCategory, setByCategory, perPerson, setPerPerson, retry, openTrip } = useCostsOverview()
+  const split: SplitOpts | null = perPerson && view ? { people: view.people, showUnassigned: view.showUnassigned } : null
 
   return (
     <>
@@ -29,10 +32,13 @@ export default function MCostsOverview() {
           <ArrowLeft size={18} strokeWidth={2} />
         </MIconBtn>
         <h1 className="min-w-0 flex-1 truncate text-[0.9375rem] font-bold text-m-ink">{t('costsOverview.title')}</h1>
-        <MToggle checked={byCategory} onChange={setByCategory} ariaLabel={t('costsOverview.byCategory')} />
       </MGlassBar>
 
       <div className="px-4 pb-[calc(var(--bottom-nav-h)+24px)] pt-[calc(var(--m-safe-top,12px)+66px)]">
+        <div className="mb-3 flex flex-wrap items-center gap-x-5 gap-y-2 px-1">
+          <SwitchRow label={t('costsOverview.byCategory')} checked={byCategory} onChange={setByCategory} />
+          <SwitchRow label={t('costsOverview.perPerson', { count: view?.people.length ?? 0 })} checked={perPerson} onChange={setPerPerson} />
+        </div>
         {status === 'loading' && !view && (
           <div className="flex justify-center py-14">
             <span className="inline-block h-6 w-6 animate-spin rounded-full border-2 border-[color:var(--m-trackoff)] border-t-[color:var(--m-ink)]" />
@@ -66,8 +72,9 @@ export default function MCostsOverview() {
                 <span className="font-geist text-[1.25rem] font-bold tabular-nums text-m-ink">{view.totals.amount}</span>
               </div>
               <p className="mt-0.5 text-[0.75rem] text-m-faint">{t('costsOverview.subtitle', { currency: view.currency })}</p>
+              <SplitLines split={view.totals} opts={split} t={t} />
               {byCategory && view.totals.categories.map(c => (
-                <CategoryLine key={c.category} category={c.category} amount={c.amount} original={null} t={t} />
+                <CategoryLine key={c.category} category={c.category} amount={c.amount} original={null} split={c} opts={split} t={t} />
               ))}
             </section>
 
@@ -77,7 +84,7 @@ export default function MCostsOverview() {
 
             <div className="mt-3 overflow-hidden rounded-[20px] border border-[color:var(--m-cbr)] bg-[color:var(--m-card)]">
               {view.rows.map(row => (
-                <TripCard key={row.tripId} row={row} byCategory={byCategory} onOpen={openTrip} t={t} />
+                <TripCard key={row.tripId} row={row} byCategory={byCategory} split={split} onOpen={openTrip} t={t} />
               ))}
             </div>
           </>
@@ -87,28 +94,71 @@ export default function MCostsOverview() {
   )
 }
 
-function CategoryLine({ category, amount, original, t }: {
-  category: CostCategory
-  amount: string | null
-  original: string | null
-  t: T
-}) {
-  const meta = COST_CAT_META[category]
+/** The per-person columns when "Per person" is on. */
+interface SplitOpts {
+  people: OverviewPersonColumn[]
+  showUnassigned: boolean
+}
+
+function SwitchRow({ label, checked, onChange }: { label: string; checked: boolean; onChange: (v: boolean) => void }) {
   return (
-    <div className="mt-2 flex items-center gap-2 text-[0.8125rem]">
-      <meta.Icon size={14} strokeWidth={2} className="flex-none" style={{ color: meta.color }} />
-      <span className="min-w-0 flex-1 truncate text-m-muted">{t(meta.labelKey)}</span>
-      <span className="text-right tabular-nums text-m-ink">
-        {amount ?? t('costsOverview.noRate')}
-        {original && <span className="block text-[0.6875rem] text-m-faint">{original}</span>}
-      </span>
+    <span className="flex items-center gap-2 text-[0.8125rem] font-semibold text-m-muted">
+      <MToggle checked={checked} onChange={onChange} ariaLabel={label} />
+      {label}
+    </span>
+  )
+}
+
+/** One small line per person (and the unassigned rest) under a figure; "–" where the person has no share. */
+function SplitLines({ split, opts, t }: { split: OverviewSplit; opts: SplitOpts | null; t: T }) {
+  if (!opts) return null
+  return (
+    <div className="mt-1.5 space-y-1 border-l-2 border-[color:var(--m-rowbr)] pl-2.5">
+      {opts.people.map((p, i) => (
+        <div key={p.userId} className="flex items-center gap-2 text-[0.75rem]">
+          <RingAvatar userId={p.userId} username={p.name} avatarUrl={p.avatarUrl} size={18} innerBg="var(--m-card)" textColor="var(--m-ink)" />
+          <span className="min-w-0 flex-1 truncate text-m-muted">{p.name}</span>
+          <span className="tabular-nums text-m-ink">{split.people[i] ?? '–'}</span>
+        </div>
+      ))}
+      {opts.showUnassigned && (
+        <div className="flex items-center gap-2 text-[0.75rem]">
+          <span className="min-w-0 flex-1 truncate text-m-faint">{t('costsOverview.unassigned')}</span>
+          <span className="tabular-nums text-m-ink">{split.unassigned}</span>
+        </div>
+      )}
     </div>
   )
 }
 
-function TripCard({ row, byCategory, onOpen, t }: {
+function CategoryLine({ category, amount, original, split, opts, t }: {
+  category: CostCategory
+  amount: string | null
+  original: string | null
+  split: OverviewSplit
+  opts: SplitOpts | null
+  t: T
+}) {
+  const meta = COST_CAT_META[category]
+  return (
+    <div className="mt-2">
+      <div className="flex items-center gap-2 text-[0.8125rem]">
+        <meta.Icon size={14} strokeWidth={2} className="flex-none" style={{ color: meta.color }} />
+        <span className="min-w-0 flex-1 truncate text-m-muted">{t(meta.labelKey)}</span>
+        <span className="text-right tabular-nums text-m-ink">
+          {amount ?? t('costsOverview.noRate')}
+          {original && <span className="block text-[0.6875rem] text-m-faint">{original}</span>}
+        </span>
+      </div>
+      <SplitLines split={split} opts={opts} t={t} />
+    </div>
+  )
+}
+
+function TripCard({ row, byCategory, split, onOpen, t }: {
   row: OverviewTripRow
   byCategory: boolean
+  split: SplitOpts | null
   onOpen: (tripId: number) => void
   t: T
 }) {
@@ -134,8 +184,9 @@ function TripCard({ row, byCategory, onOpen, t }: {
         </div>
         <ChevronRight size={16} strokeWidth={2} className="flex-none text-m-faint" />
       </div>
+      <SplitLines split={row} opts={split} t={t} />
       {byCategory && row.categories.map(c => (
-        <CategoryLine key={c.category} category={c.category} amount={c.amount} original={c.original} t={t} />
+        <CategoryLine key={c.category} category={c.category} amount={c.amount} original={c.original} split={c} opts={split} t={t} />
       ))}
     </button>
   )

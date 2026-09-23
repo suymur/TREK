@@ -4,6 +4,8 @@ const costsOverview: TranslationStrings = {
   'costsOverview.nav': '비용',
   'costsOverview.title': '비용 개요',
   'costsOverview.subtitle': '모든 여행을 {currency}(으)로 합산',
+  'costsOverview.perPerson': '사람별 ({count})',
+  'costsOverview.unassigned': '미지정',
   'costsOverview.byCategory': '카테고리별',
   'costsOverview.trip': '여행',
   'costsOverview.expenses': '지출',

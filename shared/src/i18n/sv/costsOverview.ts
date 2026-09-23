@@ -4,6 +4,8 @@ const costsOverview: TranslationStrings = {
   'costsOverview.nav': 'Kostnader',
   'costsOverview.title': 'Kostnadsöversikt',
   'costsOverview.subtitle': 'Alla dina resor, summerade i {currency}',
+  'costsOverview.perPerson': 'Per person ({count})',
+  'costsOverview.unassigned': 'Ej tilldelat',
   'costsOverview.byCategory': 'Per kategori',
   'costsOverview.trip': 'Resa',
   'costsOverview.expenses': 'Utgifter',

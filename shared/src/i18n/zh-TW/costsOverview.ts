@@ -4,6 +4,8 @@ const costsOverview: TranslationStrings = {
   'costsOverview.nav': '費用',
   'costsOverview.title': '費用總覽',
   'costsOverview.subtitle': '你的所有旅程，以 {currency} 合計',
+  'costsOverview.perPerson': '依人員 ({count})',
+  'costsOverview.unassigned': '未分配',
   'costsOverview.byCategory': '依類別',
   'costsOverview.trip': '旅程',
   'costsOverview.expenses': '支出',

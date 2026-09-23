@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest'
 import { Routes, Route, useLocation } from 'react-router'
 import userEvent from '@testing-library/user-event'
 import { http, HttpResponse } from 'msw'
-import { render, screen, waitFor } from '../../tests/helpers/render'
+import { render, screen, waitFor, within } from '../../tests/helpers/render'
 import { server } from '../../tests/helpers/msw/server'
 import { resetAllStores, seedStore } from '../../tests/helpers/store'
 import { buildUser } from '../../tests/helpers/factories'
@@ -15,6 +15,8 @@ import CostsOverviewPage from './CostsOverviewPage'
 // Testing Library collapses the no-break space Intl puts before the symbol; the matcher has to as well.
 const money = (v: number, cur: string) => formatMoney(v, cur, 'en-US').replace(/\s+/g, ' ')
 const eur = (v: number) => money(v, 'EUR')
+// textContent keeps the no-break space.
+const rawEur = (v: number) => formatMoney(v, 'EUR', 'en-US')
 
 function TripProbe() {
   const location = useLocation()
@@ -130,5 +132,58 @@ describe('CostsOverviewPage', () => {
     renderPage()
 
     await waitFor(() => expect(screen.getByText('The cost overview needs a connection.')).toBeInTheDocument())
+  })
+
+  it('FE-PAGE-COSTS-009: "Per person" adds one column per participant plus Unassigned, with the count in the label', async () => {
+    const user = userEvent.setup()
+    renderPage()
+    await screen.findByRole('button', { name: 'Open the costs of Tokyo' })
+    expect(screen.queryByRole('columnheader', { name: /Alice/ })).not.toBeInTheDocument()
+
+    await user.click(screen.getByRole('checkbox', { name: 'Per person (2)' }))
+
+    const headers = screen.getAllByRole('columnheader').map(h => h.textContent)
+    expect(headers).toEqual(['Trip', 'Expenses', expect.stringContaining('Alice'), expect.stringContaining('bob'), 'Unassigned', 'Total'])
+    expect(within(screen.getByRole('columnheader', { name: /bob/ })).getByRole('img')).toHaveAttribute('src', '/uploads/avatars/b.png')
+
+    const rome = screen.getByRole('button', { name: 'Open the costs of Rome' }).closest('tr')!
+    // bob is not in Rome: a dash, not 0. Alice + unassigned = the row total.
+    expect(within(rome).getAllByRole('cell').map(c => c.textContent)).toEqual([
+      expect.stringContaining('Rome'), '3', rawEur(350.5), '–', rawEur(56), rawEur(406.5),
+    ])
+    const all = screen.getByRole('rowheader', { name: 'All trips' }).closest('tr')!
+    expect(within(all).getAllByRole('cell').map(c => c.textContent)).toEqual(['', rawEur(440.5), rawEur(10), rawEur(56), rawEur(506.5)])
+  })
+
+  it('FE-PAGE-COSTS-010: with "By category" on too, every category row carries the split', async () => {
+    const user = userEvent.setup()
+    renderPage()
+    await screen.findByRole('button', { name: 'Open the costs of Tokyo' })
+
+    await user.click(screen.getByRole('checkbox', { name: 'Per person (2)' }))
+    await user.click(screen.getByRole('checkbox', { name: 'By category' }))
+
+    const flights = screen.getAllByText('Flights')[0]!.closest('tr')!
+    expect(within(flights).getAllByRole('cell').map(c => c.textContent)).toEqual([
+      'Flights', '', rawEur(150.5), '–', rawEur(0), rawEur(150.5),
+    ])
+  })
+
+  it('FE-PAGE-COSTS-011: no Unassigned column when nothing is unassigned', async () => {
+    const data = buildCostsOverview()
+    const rome = data.trips[1]!
+    data.trips[1] = {
+      ...rome,
+      unassigned: { total: 0, display_total: 0 },
+      categories: rome.categories.map(c => ({ ...c, unassigned: { total: 0, display_total: 0 } })),
+    }
+    server.use(http.get('/api/costs/overview', () => HttpResponse.json(data)))
+    const user = userEvent.setup()
+    renderPage()
+    await screen.findByRole('button', { name: 'Open the costs of Tokyo' })
+
+    await user.click(screen.getByRole('checkbox', { name: 'Per person (2)' }))
+
+    expect(screen.queryByRole('columnheader', { name: 'Unassigned' })).not.toBeInTheDocument()
   })
 })

@@ -4,6 +4,8 @@ const costsOverview: TranslationStrings = {
   'costsOverview.nav': 'Náklady',
   'costsOverview.title': 'Přehled nákladů',
   'costsOverview.subtitle': 'Všechny vaše cesty, sečtené v {currency}',
+  'costsOverview.perPerson': 'Na osobu ({count})',
+  'costsOverview.unassigned': 'Nepřiřazeno',
   'costsOverview.byCategory': 'Podle kategorie',
   'costsOverview.trip': 'Cesta',
   'costsOverview.expenses': 'Výdaje',
