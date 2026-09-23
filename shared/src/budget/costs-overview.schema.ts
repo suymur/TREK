@@ -11,7 +11,7 @@ import { z } from 'zod';
  * one display currency (the caller's default currency). The global figures are
  * sums of the per-trip display figures, so the global total always equals the
  * sum of the trip rows the page prints. Every total splits by cost category;
- * the category figures sum to their total exactly (whole cents).
+ * the final and estimated category figures each sum to their status total exactly (whole cents).
  *
  * Answers 403 `{ error: 'Costs addon is not enabled' }` while the admin has the
  * Costs addon switched off.
@@ -92,7 +92,7 @@ const costCategorySchema = z.enum(COST_CATEGORIES);
  */
 export const costsOverviewShareSchema = z.object({
   user_id: idSchema,
-  /** In the trip currency. */
+  /** Final amount in the trip currency. */
   total: z.number(),
   /** In the display currency; null when the trip had no exchange rate. */
   display_total: z.number().nullable(),
@@ -129,6 +129,8 @@ export const costsOverviewTripCategorySchema = z.object({
   total: z.number(),
   /** null when no exchange rate from the trip currency to the display currency was available. */
   display_total: z.number().nullable(),
+  estimated_total: z.number(),
+  estimated_display_total: z.number().nullable(),
   people: z.array(costsOverviewShareSchema),
   unassigned: costsOverviewUnassignedSchema,
 });
@@ -144,9 +146,13 @@ export const costsOverviewTripSchema = z.object({
   is_archived: z.boolean(),
   item_count: z.number().int().nonnegative(),
   total: z.number(),
-  /** `total` in the display currency; null when no exchange rate was available. */
+  /** Final amount in the display currency; null when no exchange rate was available. */
   display_total: z.number().nullable(),
-  /** Categories with at least one expense, in COST_CATEGORIES order. */
+  /** Estimate in the trip currency; excluded from person shares and settlement. */
+  estimated_total: z.number(),
+  /** Estimate in display currency, or null without an exchange rate. */
+  estimated_display_total: z.number().nullable(),
+  /** Categories with at least one expense of either status, in COST_CATEGORIES order. */
   categories: z.array(costsOverviewTripCategorySchema),
   people: z.array(costsOverviewShareSchema),
   unassigned: costsOverviewUnassignedSchema,
@@ -157,6 +163,7 @@ export type CostsOverviewTrip = z.infer<typeof costsOverviewTripSchema>;
 export const costsOverviewCategoryTotalSchema = z.object({
   category: costCategorySchema,
   total: z.number(),
+  estimated_total: z.number(),
   people: z.array(costsOverviewGlobalShareSchema),
   unassigned: z.number(),
 });
@@ -166,8 +173,9 @@ export const costsOverviewResponseSchema = z.object({
   /** The display currency every `display_total` and the global figures are in. */
   currency: z.string(),
   trips: z.array(costsOverviewTripSchema),
-  /** Sum of every trip `display_total`; trips without a rate are left out. */
+  /** Sum of every trip final `display_total`; trips without a rate are left out. */
   total: z.number(),
+  estimated_total: z.number(),
   categories: z.array(costsOverviewCategoryTotalSchema),
   /** Each person's share across all converted trips, in the display currency. */
   people: z.array(costsOverviewGlobalShareSchema),

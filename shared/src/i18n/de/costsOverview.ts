@@ -9,6 +9,8 @@ const costsOverview: TranslationStrings = {
   'costsOverview.byCategory': 'Nach Kategorie',
   'costsOverview.trip': 'Reise',
   'costsOverview.expenses': 'Ausgaben',
+  'costsOverview.final': 'Endgültig',
+  'costsOverview.estimated': 'Geschätzt',
   'costsOverview.total': 'Summe',
   'costsOverview.allTrips': 'Alle Reisen',
   'costsOverview.empty': 'Du hast noch keine Reisen.',

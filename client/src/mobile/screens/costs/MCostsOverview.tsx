@@ -69,12 +69,12 @@ export default function MCostsOverview() {
             <section className="rounded-[20px] border border-[color:var(--m-cbr)] bg-[color:var(--m-card)] px-[14px] py-3">
               <div className="flex items-baseline justify-between gap-3">
                 <span className="text-[0.8125rem] font-semibold text-m-muted">{t('costsOverview.allTrips')}</span>
-                <span className="font-geist text-[1.25rem] font-bold tabular-nums text-m-ink">{view.totals.amount}</span>
+                <span className="text-right"><span className="block text-[0.6875rem] text-m-faint">{t('costsOverview.final')}</span><span className="block font-geist text-[1.25rem] font-bold tabular-nums text-m-ink">{view.totals.amount}</span></span>
               </div>
-              <p className="mt-0.5 text-[0.75rem] text-m-faint">{t('costsOverview.subtitle', { currency: view.currency })}</p>
+              <p className="mt-0.5 text-[0.75rem] text-m-faint">{t('costsOverview.estimated')}: {view.totals.estimated}</p>
               <SplitLines split={view.totals} opts={split} t={t} />
               {byCategory && view.totals.categories.map(c => (
-                <CategoryLine key={c.category} category={c.category} amount={c.amount} original={null} split={c} opts={split} t={t} />
+                <CategoryLine key={c.category} category={c.category} amount={c.amount} original={null} estimated={c.estimated} estimatedOriginal={null} split={c} opts={split} t={t} />
               ))}
             </section>
 
@@ -131,10 +131,12 @@ function SplitLines({ split, opts, t }: { split: OverviewSplit; opts: SplitOpts 
   )
 }
 
-function CategoryLine({ category, amount, original, split, opts, t }: {
+function CategoryLine({ category, amount, original, estimated, estimatedOriginal, split, opts, t }: {
   category: CostCategory
   amount: string | null
   original: string | null
+  estimated: string | null
+  estimatedOriginal: string | null
   split: OverviewSplit
   opts: SplitOpts | null
   t: T
@@ -148,6 +150,8 @@ function CategoryLine({ category, amount, original, split, opts, t }: {
         <span className="text-right tabular-nums text-m-ink">
           {amount ?? t('costsOverview.noRate')}
           {original && <span className="block text-[0.6875rem] text-m-faint">{original}</span>}
+          <span className="block text-[0.6875rem] text-m-faint">{t('costsOverview.estimated')}: {estimated ?? t('costsOverview.noRate')}</span>
+          {estimatedOriginal && <span className="block text-[0.6875rem] text-m-faint">{estimatedOriginal}</span>}
         </span>
       </div>
       <SplitLines split={split} opts={opts} t={t} />
@@ -179,14 +183,16 @@ function TripCard({ row, byCategory, split, onOpen, t }: {
           </div>
         </div>
         <div className="text-right tabular-nums">
-          <div className="text-[0.875rem] font-semibold text-m-ink">{row.amount ?? t('costsOverview.noRate')}</div>
+          <div className="text-[0.875rem] font-semibold text-m-ink">{t('costsOverview.final')}: {row.amount ?? t('costsOverview.noRate')}</div>
           {row.original && <div className="text-[0.6875rem] text-m-faint">{row.original}</div>}
+          <div className="text-[0.6875rem] text-m-faint">{t('costsOverview.estimated')}: {row.estimated ?? t('costsOverview.noRate')}</div>
+          {row.estimatedOriginal && <div className="text-[0.6875rem] text-m-faint">{row.estimatedOriginal}</div>}
         </div>
         <ChevronRight size={16} strokeWidth={2} className="flex-none text-m-faint" />
       </div>
       <SplitLines split={row} opts={split} t={t} />
       {byCategory && row.categories.map(c => (
-        <CategoryLine key={c.category} category={c.category} amount={c.amount} original={c.original} split={c} opts={split} t={t} />
+        <CategoryLine key={c.category} category={c.category} amount={c.amount} original={c.original} estimated={c.estimated} estimatedOriginal={c.estimatedOriginal} split={c} opts={split} t={t} />
       ))}
     </button>
   )

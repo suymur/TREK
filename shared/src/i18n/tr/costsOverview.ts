@@ -9,6 +9,8 @@ const costsOverview: TranslationStrings = {
   'costsOverview.byCategory': 'Kategoriye göre',
   'costsOverview.trip': 'Seyahat',
   'costsOverview.expenses': 'Harcamalar',
+  'costsOverview.final': 'Final',
+  'costsOverview.estimated': 'Estimated',
   'costsOverview.total': 'Toplam',
   'costsOverview.allTrips': 'Tüm seyahatler',
   'costsOverview.empty': 'Henüz seyahatin yok.',

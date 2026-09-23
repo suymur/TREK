@@ -47,7 +47,7 @@ describe('MCostsOverview', () => {
     expect(screen.getByRole('button', { name: 'Open the costs of Rome' })).toBeInTheDocument()
     expect(screen.getByText('All trips')).toBeInTheDocument()
     expect(screen.getByText(eur(506.5))).toBeInTheDocument()
-    expect(screen.getByText(eur(100))).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Open the costs of Tokyo' })).toHaveTextContent(eur(100))
     expect(screen.queryByText('Transport')).not.toBeInTheDocument()
   })
 

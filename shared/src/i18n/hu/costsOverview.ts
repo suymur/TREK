@@ -9,6 +9,8 @@ const costsOverview: TranslationStrings = {
   'costsOverview.byCategory': 'Kategóriánként',
   'costsOverview.trip': 'Utazás',
   'costsOverview.expenses': 'Kiadások',
+  'costsOverview.final': 'Final',
+  'costsOverview.estimated': 'Estimated',
   'costsOverview.total': 'Összesen',
   'costsOverview.allTrips': 'Összes utazás',
   'costsOverview.empty': 'Még nincs utazásod.',

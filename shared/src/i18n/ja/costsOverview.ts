@@ -9,6 +9,8 @@ const costsOverview: TranslationStrings = {
   'costsOverview.byCategory': 'カテゴリ別',
   'costsOverview.trip': '旅行',
   'costsOverview.expenses': '支出',
+  'costsOverview.final': 'Final',
+  'costsOverview.estimated': 'Estimated',
   'costsOverview.total': '合計',
   'costsOverview.allTrips': 'すべての旅行',
   'costsOverview.empty': '旅行はまだありません。',

@@ -157,7 +157,7 @@ describe('buildCostsOverview', () => {
     const out = buildCostsOverview([trip(1, null, { is_archived: 1, start_date: null, end_date: null })], [], [], 'EUR', null);
     expect(out.trips[0]).toEqual({
       trip_id: 1, title: 'Trip 1', start_date: null, end_date: null, currency: 'EUR', is_archived: true,
-      item_count: 0, total: 0, display_total: 0, categories: [],
+      item_count: 0, total: 0, display_total: 0, estimated_total: 0, estimated_display_total: 0, categories: [],
       people: [], unassigned: { total: 0, display_total: 0 },
     });
     expect(out.categories).toEqual([]);
@@ -245,7 +245,7 @@ describe('buildCostsOverview — per person', () => {
     );
     const t = out.trips[0]!;
     expect(t.display_total).toBe(6.69);
-    const disp = (xs: { display_total: number | null }[]) => cents(xs.map((x) => x.display_total ?? 0));
+    const disp = (xs: { display_total?: number | null }[]) => cents(xs.map((x) => x.display_total ?? 0));
     expect(disp([...t.people, t.unassigned])).toBe(cents([t.display_total!]));
     for (const cat of t.categories) {
       expect(disp([...cat.people, cat.unassigned])).toBe(cents([cat.display_total!]));
@@ -265,7 +265,7 @@ describe('buildCostsOverview — per person', () => {
       { user_id: 1, total: 40 },
       { user_id: 2, total: 10 },
     ]);
-    expect(out.categories[0]).toEqual({ category: 'food', total: 50, people: [{ user_id: 1, total: 40 }, { user_id: 2, total: 10 }], unassigned: 0 });
+    expect(out.categories[0]).toEqual({ category: 'food', total: 50, estimated_total: 0, people: [{ user_id: 1, total: 40 }, { user_id: 2, total: 10 }], unassigned: 0 });
   });
 
   it('lists the participants sorted by name, case-insensitively', () => {
@@ -281,5 +281,25 @@ describe('buildCostsOverview — per person', () => {
     expect(out.trips[0]!.unassigned).toEqual({ total: 0, display_total: null });
     expect(out.people).toEqual([]);
     expect(out.participants.map((p) => p.user_id)).toEqual([1]);
+  });
+});
+
+describe('buildCostsOverview — final and estimated', () => {
+  it('keeps estimates out of per-person shares while grouping both statuses by category', () => {
+    const final = item(1, 'food', 10, { cost_status: 'final' });
+    const estimate = item(1, 'food', 7, { cost_status: 'estimate' });
+    const onlyEstimate = item(1, 'transport', 3, { cost_status: 'estimate' });
+    const out = buildCostsOverview(
+      [trip(1, 'EUR')], [final, estimate, onlyEstimate],
+      [member(final, 1), member(estimate, 2), member(onlyEstimate, 2)], 'EUR', null,
+    );
+    expect(out.total).toBe(10);
+    expect(out.estimated_total).toBe(10);
+    expect(out.people).toEqual([{ user_id: 1, total: 10 }]);
+    expect(out.participants.map(p => p.user_id)).toEqual([1]);
+    expect(out.trips[0]).toMatchObject({ item_count: 3, total: 10, estimated_total: 10 });
+    expect(out.trips[0]!.categories.map(c => [c.category, c.total, c.estimated_total])).toEqual([
+      ['food', 10, 7], ['transport', 0, 3],
+    ]);
   });
 });

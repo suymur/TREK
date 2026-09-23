@@ -189,9 +189,22 @@ describe('Cost overview e2e (real auth guard + temp SQLite)', () => {
     db.prepare("INSERT INTO users (id, username, email, password_hash, role, password_version) VALUES (4, 'new', 'new@example.test', 'x', 'user', 0)").run();
     const body = costsOverviewResponseSchema.parse((await get(4)).body);
     expect(body).toEqual({
-      currency: 'EUR', trips: [], total: 0, categories: [], people: [], unassigned: 0, participants: [], unconverted_trip_ids: [],
+      currency: 'EUR', trips: [], total: 0, estimated_total: 0, categories: [], people: [], unassigned: 0, participants: [], unconverted_trip_ids: [],
     });
     expect(getRates).not.toHaveBeenCalled();
+  });
+
+  it('reads the stored estimate status and excludes it from final and person totals', async () => {
+    const estimate = db.prepare("SELECT id FROM budget_items WHERE trip_id = ? AND category = 'transport'").get(tokyo) as { id: number };
+    db.prepare("UPDATE budget_items SET cost_status = 'estimate' WHERE id = ?").run(estimate.id);
+    try {
+      const body = costsOverviewResponseSchema.parse((await get(1)).body);
+      expect(body.trips.find(t => t.trip_id === tokyo)).toMatchObject({ total: 3000, estimated_total: 12000 });
+      expect(body.estimated_total).toBe(12000);
+      expect(body.trips.find(t => t.trip_id === tokyo)!.categories.find(c => c.category === 'transport')).toMatchObject({ total: 0, estimated_total: 12000 });
+    } finally {
+      db.prepare("UPDATE budget_items SET cost_status = 'final' WHERE id = ?").run(estimate.id);
+    }
   });
 
   it('splits the costs per person, with the rest unassigned', async () => {

@@ -12,37 +12,37 @@ const data: CostsOverviewResponse = {
   trips: [
     {
       trip_id: 7, title: 'Tokyo', start_date: '2026-10-01', end_date: '2026-10-09', currency: 'JPY', is_archived: false,
-      item_count: 2, total: 15000, display_total: 100,
+      item_count: 2, total: 15000, display_total: 100, estimated_total: 0, estimated_display_total: 0,
       categories: [
-        { category: 'food', total: 3000, display_total: 20, people: [{ user_id: 2, total: 3000, display_total: 20 }], unassigned: none },
-        { category: 'transport', total: 12000, display_total: 80, people: [], unassigned: { total: 12000, display_total: 80 } },
+        { category: 'food', total: 3000, display_total: 20, estimated_total: 0, estimated_display_total: 0, people: [{ user_id: 2, total: 3000, display_total: 20 }], unassigned: none },
+        { category: 'transport', total: 12000, display_total: 80, estimated_total: 0, estimated_display_total: 0, people: [], unassigned: { total: 12000, display_total: 80 } },
       ],
       people: [{ user_id: 2, total: 3000, display_total: 20 }],
       unassigned: { total: 12000, display_total: 80 },
     },
     {
       trip_id: 3, title: 'Rome', start_date: null, end_date: null, currency: 'EUR', is_archived: true,
-      item_count: 1, total: 40, display_total: 40,
-      categories: [{ category: 'food', total: 40, display_total: 40, people: [{ user_id: 1, total: 40, display_total: 40 }], unassigned: none }],
+      item_count: 1, total: 40, display_total: 40, estimated_total: 0, estimated_display_total: 0,
+      categories: [{ category: 'food', total: 40, display_total: 40, estimated_total: 0, estimated_display_total: 0, people: [{ user_id: 1, total: 40, display_total: 40 }], unassigned: none }],
       people: [{ user_id: 1, total: 40, display_total: 40 }],
       unassigned: none,
     },
     {
       trip_id: 2, title: 'Bangkok', start_date: '2026-01-05', end_date: null, currency: 'THB', is_archived: false,
-      item_count: 1, total: 500, display_total: null,
-      categories: [{ category: 'food', total: 500, display_total: null, people: [{ user_id: 1, total: 500, display_total: null }], unassigned: { total: 0, display_total: null } }],
+      item_count: 1, total: 500, display_total: null, estimated_total: 0, estimated_display_total: null,
+      categories: [{ category: 'food', total: 500, display_total: null, estimated_total: 0, estimated_display_total: null, people: [{ user_id: 1, total: 500, display_total: null }], unassigned: { total: 0, display_total: null } }],
       people: [{ user_id: 1, total: 500, display_total: null }],
       unassigned: { total: 0, display_total: null },
     },
     {
       trip_id: 1, title: 'Empty', start_date: null, end_date: null, currency: 'USD', is_archived: false,
-      item_count: 0, total: 0, display_total: 0, categories: [], people: [], unassigned: none,
+      item_count: 0, total: 0, display_total: 0, estimated_total: 0, estimated_display_total: 0, categories: [], people: [], unassigned: none,
     },
   ],
-  total: 140,
+  total: 140, estimated_total: 0,
   categories: [
-    { category: 'food', total: 60, people: [{ user_id: 1, total: 40 }, { user_id: 2, total: 20 }], unassigned: 0 },
-    { category: 'transport', total: 80, people: [], unassigned: 80 },
+    { category: 'food', total: 60, estimated_total: 0, people: [{ user_id: 1, total: 40 }, { user_id: 2, total: 20 }], unassigned: 0 },
+    { category: 'transport', total: 80, estimated_total: 0, people: [], unassigned: 80 },
   ],
   people: [{ user_id: 1, total: 40 }, { user_id: 2, total: 20 }],
   unassigned: 80,
@@ -133,6 +133,20 @@ describe('buildOverviewView', () => {
     expect(view.totals.people).toEqual([eur(40), eur(20)])
     expect(view.totals.unassigned).toBe(eur(80))
     expect(view.totals.categories[1]).toMatchObject({ people: [null, null], unassigned: eur(80) })
+  })
+
+  it('formats estimated totals separately from final and person shares', () => {
+    const overview = {
+      ...data,
+      estimated_total: 5,
+      trips: data.trips.map((t, i) => i === 0 ? { ...t, estimated_total: 750, estimated_display_total: 5 } : t),
+    }
+    const result = buildOverviewView(overview, 'en-US')
+    expect(result.totals.amount).toBe(eur(140))
+    expect(result.totals.estimated).toBe(eur(5))
+    expect(result.rows[0]!.estimated).toBe(eur(5))
+    expect(result.rows[0]!.estimatedOriginal).toBe(formatMoney(750, 'JPY', 'en-US'))
+    expect(result.rows[0]!.people).toEqual([null, eur(20)])
   })
 
   it('hides the unassigned column when nothing is unassigned anywhere', () => {

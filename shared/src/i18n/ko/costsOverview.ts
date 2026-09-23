@@ -9,6 +9,8 @@ const costsOverview: TranslationStrings = {
   'costsOverview.byCategory': '카테고리별',
   'costsOverview.trip': '여행',
   'costsOverview.expenses': '지출',
+  'costsOverview.final': 'Final',
+  'costsOverview.estimated': 'Estimated',
   'costsOverview.total': '합계',
   'costsOverview.allTrips': '모든 여행',
   'costsOverview.empty': '아직 여행이 없습니다.',

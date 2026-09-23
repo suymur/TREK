@@ -13,8 +13,8 @@ import { allocateDisplayCents, splitEqualShares } from '../budget/budget.service
  * The pure half of the cost overview (#2): no DB, no network. The service reads
  * the rows and the rates and hands them here.
  *
- * Money is added in whole cents of the trip currency, the same rule the
- * settlement follows, so the category split of a trip adds up to its total. A
+ * Final and estimated amounts are added separately in whole cents of the trip
+ * currency. Only final amounts enter the per-person split, as in the settlement, so the category split of a trip adds up to its total. A
  * trip's cents convert to the display currency as one set (allocateDisplayCents),
  * so the converted categories add up to the converted total as well; the global
  * figures are plain sums of those display cents.
@@ -44,6 +44,7 @@ export interface OverviewItemRow {
   total_price: number | null;
   currency: string | null;
   exchange_rate: number | null;
+  cost_status?: 'estimate' | 'final' | null;
 }
 
 export interface OverviewMemberRow {
@@ -215,7 +216,7 @@ function participantsOf(members: OverviewMemberRow[]): CostsOverviewPerson[] {
   return [...byId.values()].sort((a, b) => a.username.localeCompare(b.username) || a.user_id - b.user_id);
 }
 
-export function buildCostsOverview(
+function buildOverviewPart(
   trips: OverviewTripRow[],
   items: OverviewItemRow[],
   members: OverviewMemberRow[],
@@ -291,11 +292,15 @@ export function buildCostsOverview(
       is_archived: !!trip.is_archived,
       item_count: tripItems.length,
       total: toMoney(totalCents),
+      estimated_total: 0,
+      estimated_display_total: 0,
       display_total: displayTotal === null ? null : toMoney(displayTotal),
       categories: keys.map((category, i) => {
         const d = displayCats[i] ?? null;
         return {
           category,
+          estimated_total: 0,
+          estimated_display_total: 0,
           total: toMoney(catCents[i] ?? 0),
           display_total: d === null ? null : toMoney(sumOf(d)),
           ...shares(catCells.get(category) ?? new Map(), d),
@@ -309,10 +314,12 @@ export function buildCostsOverview(
     currency: display,
     trips: rows,
     total: toMoney(globalTotal),
+    estimated_total: 0,
     categories: COST_CATEGORIES.filter((k) => globalCats.has(k)).map((category) => {
       const cells = globalCats.get(category) ?? new Map<number, number>();
       return {
         category,
+        estimated_total: 0,
         total: toMoney([...cells.values()].reduce((a, c) => a + c, 0)),
         ...globalShares(cells),
       };
@@ -320,5 +327,55 @@ export function buildCostsOverview(
     ...globalShares(globalPeople),
     participants: participantsOf(members.filter((m) => itemIds.has(m.budget_item_id))),
     unconverted_trip_ids: unconverted,
+  };
+}
+
+/** Keep estimates outside the settlement-like person split and expose them separately. */
+export function buildCostsOverview(
+  trips: OverviewTripRow[],
+  items: OverviewItemRow[],
+  members: OverviewMemberRow[],
+  display: string,
+  rates: Rates,
+): CostsOverviewResponse {
+  const finalItems = items.filter(item => item.cost_status !== 'estimate');
+  const estimateItems = items.filter(item => item.cost_status === 'estimate');
+  const final = buildOverviewPart(trips, finalItems, members, display, rates);
+  const estimate = buildOverviewPart(trips, estimateItems, [], display, rates);
+  const estimateTrips = new Map(estimate.trips.map(row => [row.trip_id, row]));
+  const mergedTrips = final.trips.map(row => {
+    const e = estimateTrips.get(row.trip_id)!;
+    const eCats = new Map(e.categories.map(cat => [cat.category, cat]));
+    const fCats = new Map(row.categories.map(cat => [cat.category, cat]));
+    return {
+      ...row,
+      item_count: row.item_count + e.item_count,
+      estimated_total: e.total,
+      estimated_display_total: e.display_total,
+      categories: COST_CATEGORIES.filter(key => fCats.has(key) || eCats.has(key)).map(key => {
+        const f = fCats.get(key);
+        const ec = eCats.get(key);
+        return {
+          ...(f ?? {
+            category: key, total: 0, display_total: 0,
+            people: [], unassigned: { total: 0, display_total: 0 },
+          }),
+          estimated_total: ec?.total ?? 0,
+          estimated_display_total: ec?.display_total ?? (e.display_total === null ? null : 0),
+        };
+      }),
+    };
+  });
+  const eGlobalCats = new Map(estimate.categories.map(cat => [cat.category, cat]));
+  const fGlobalCats = new Map(final.categories.map(cat => [cat.category, cat]));
+  return {
+    ...final,
+    trips: mergedTrips,
+    estimated_total: estimate.total,
+    categories: COST_CATEGORIES.filter(key => fGlobalCats.has(key) || eGlobalCats.has(key)).map(key => ({
+      ...(fGlobalCats.get(key) ?? { category: key, total: 0, people: [], unassigned: 0 }),
+      estimated_total: eGlobalCats.get(key)?.total ?? 0,
+    })),
+    unconverted_trip_ids: [...new Set([...final.unconverted_trip_ids, ...estimate.unconverted_trip_ids])],
   };
 }

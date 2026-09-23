@@ -9,6 +9,8 @@ const costsOverview: TranslationStrings = {
   'costsOverview.byCategory': 'Podle kategorie',
   'costsOverview.trip': 'Cesta',
   'costsOverview.expenses': 'Výdaje',
+  'costsOverview.final': 'Final',
+  'costsOverview.estimated': 'Estimated',
   'costsOverview.total': 'Celkem',
   'costsOverview.allTrips': 'Všechny cesty',
   'costsOverview.empty': 'Zatím nemáte žádné cesty.',

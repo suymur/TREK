@@ -9,6 +9,8 @@ const costsOverview: TranslationStrings = {
   'costsOverview.byCategory': 'Per kategori',
   'costsOverview.trip': 'Perjalanan',
   'costsOverview.expenses': 'Pengeluaran',
+  'costsOverview.final': 'Final',
+  'costsOverview.estimated': 'Estimated',
   'costsOverview.total': 'Total',
   'costsOverview.allTrips': 'Semua perjalanan',
   'costsOverview.empty': 'Kamu belum punya perjalanan.',

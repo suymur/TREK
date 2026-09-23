@@ -9,6 +9,8 @@ const costsOverview: TranslationStrings = {
   'costsOverview.byCategory': 'حسب الفئة',
   'costsOverview.trip': 'الرحلة',
   'costsOverview.expenses': 'المصروفات',
+  'costsOverview.final': 'Final',
+  'costsOverview.estimated': 'Estimated',
   'costsOverview.total': 'الإجمالي',
   'costsOverview.allTrips': 'جميع الرحلات',
   'costsOverview.empty': 'ليست لديك رحلات بعد.',

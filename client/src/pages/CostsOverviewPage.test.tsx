@@ -143,16 +143,16 @@ describe('CostsOverviewPage', () => {
     await user.click(screen.getByRole('checkbox', { name: 'Per person (2)' }))
 
     const headers = screen.getAllByRole('columnheader').map(h => h.textContent)
-    expect(headers).toEqual(['Trip', 'Expenses', expect.stringContaining('Alice'), expect.stringContaining('bob'), 'Unassigned', 'Total'])
+    expect(headers).toEqual(['Trip', 'Expenses', expect.stringContaining('Alice'), expect.stringContaining('bob'), 'Unassigned', 'Final', 'Estimated'])
     expect(within(screen.getByRole('columnheader', { name: /bob/ })).getByRole('img')).toHaveAttribute('src', '/uploads/avatars/b.png')
 
     const rome = screen.getByRole('button', { name: 'Open the costs of Rome' }).closest('tr')!
     // bob is not in Rome: a dash, not 0. Alice + unassigned = the row total.
     expect(within(rome).getAllByRole('cell').map(c => c.textContent)).toEqual([
-      expect.stringContaining('Rome'), '3', rawEur(350.5), '–', rawEur(56), rawEur(406.5),
+      expect.stringContaining('Rome'), '3', rawEur(350.5), '–', rawEur(56), rawEur(406.5), rawEur(0),
     ])
     const all = screen.getByRole('rowheader', { name: 'All trips' }).closest('tr')!
-    expect(within(all).getAllByRole('cell').map(c => c.textContent)).toEqual(['', rawEur(440.5), rawEur(10), rawEur(56), rawEur(506.5)])
+    expect(within(all).getAllByRole('cell').map(c => c.textContent)).toEqual(['', rawEur(440.5), rawEur(10), rawEur(56), rawEur(506.5), rawEur(0)])
   })
 
   it('FE-PAGE-COSTS-010: with "By category" on too, every category row carries the split', async () => {
@@ -165,7 +165,7 @@ describe('CostsOverviewPage', () => {
 
     const flights = screen.getAllByText('Flights')[0]!.closest('tr')!
     expect(within(flights).getAllByRole('cell').map(c => c.textContent)).toEqual([
-      'Flights', '', rawEur(150.5), '–', rawEur(0), rawEur(150.5),
+      'Flights', '', rawEur(150.5), '–', rawEur(0), rawEur(150.5), rawEur(0),
     ])
   })
 

@@ -9,6 +9,8 @@ const costsOverview: TranslationStrings = {
   'costsOverview.byCategory': '依類別',
   'costsOverview.trip': '旅程',
   'costsOverview.expenses': '支出',
+  'costsOverview.final': 'Final',
+  'costsOverview.estimated': 'Estimated',
   'costsOverview.total': '合計',
   'costsOverview.allTrips': '所有旅程',
   'costsOverview.empty': '你還沒有旅程。',

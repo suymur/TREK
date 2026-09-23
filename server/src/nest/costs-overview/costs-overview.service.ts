@@ -69,7 +69,7 @@ export class CostsOverviewService {
   private loadItems(ids: number[]): OverviewItemRow[] {
     if (ids.length === 0) return [];
     return this.db.all<OverviewItemRow>(
-      `SELECT id, trip_id, category, total_price, currency, exchange_rate FROM budget_items WHERE trip_id IN (${placeholders(ids)})`,
+      `SELECT id, trip_id, category, total_price, currency, exchange_rate, cost_status FROM budget_items WHERE trip_id IN (${placeholders(ids)})`,
       ...ids,
     );
   }

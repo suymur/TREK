@@ -9,6 +9,8 @@ const costsOverview: TranslationStrings = {
   'costsOverview.byCategory': 'Ανά κατηγορία',
   'costsOverview.trip': 'Ταξίδι',
   'costsOverview.expenses': 'Δαπάνες',
+  'costsOverview.final': 'Final',
+  'costsOverview.estimated': 'Estimated',
   'costsOverview.total': 'Σύνολο',
   'costsOverview.allTrips': 'Όλα τα ταξίδια',
   'costsOverview.empty': 'Δεν έχετε ακόμη ταξίδια.',

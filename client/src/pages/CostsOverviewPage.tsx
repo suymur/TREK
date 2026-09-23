@@ -149,7 +149,8 @@ function OverviewTable({ view, byCategory, perPerson, onOpen, t }: {
               {cols?.showUnassigned && (
                 <th scope="col" className="px-3 py-2 text-right font-medium">{t('costsOverview.unassigned')}</th>
               )}
-              <th scope="col" className="px-4 py-2 text-right font-medium">{t('costsOverview.total')}</th>
+              <th scope="col" className="px-4 py-2 text-right font-medium">{t('costsOverview.final')}</th>
+              <th scope="col" className="px-4 py-2 text-right font-medium">{t('costsOverview.estimated')}</th>
             </tr>
           </thead>
           {view.rows.map(row => (
@@ -161,6 +162,7 @@ function OverviewTable({ view, byCategory, perPerson, onOpen, t }: {
               <td />
               <SplitCells split={view.totals} cols={cols} strong />
               <td className="px-4 py-3"><Amount amount={view.totals.amount} original={null} t={t} strong /></td>
+              <td className="px-4 py-3"><Amount amount={view.totals.estimated} original={null} t={t} strong /></td>
             </tr>
             {byCategory && view.totals.categories.map(c => (
               <tr key={c.category}>
@@ -168,6 +170,7 @@ function OverviewTable({ view, byCategory, perPerson, onOpen, t }: {
                 <td />
                 <SplitCells split={c} cols={cols} />
                 <td className="px-4 py-1.5"><Amount amount={c.amount} original={null} t={t} /></td>
+                <td className="px-4 py-1.5"><Amount amount={c.estimated} original={null} t={t} /></td>
               </tr>
             ))}
           </tfoot>
@@ -210,6 +213,7 @@ function TripRows({ row, byCategory, cols, onOpen, t }: {
         <td className="px-4 py-3 text-right tabular-nums text-content-muted">{row.itemCount}</td>
         <SplitCells split={row} cols={cols} strong />
         <td className="px-4 py-3"><Amount amount={row.amount} original={row.original} t={t} strong /></td>
+        <td className="px-4 py-3"><Amount amount={row.estimated} original={row.estimatedOriginal} t={t} strong /></td>
       </tr>
       {byCategory && row.categories.map(c => (
         <tr key={c.category} className="cursor-pointer hover:bg-surface-hover" onClick={() => onOpen(row.tripId)}>
@@ -217,6 +221,7 @@ function TripRows({ row, byCategory, cols, onOpen, t }: {
           <td />
           <SplitCells split={c} cols={cols} />
           <td className="px-4 py-1.5"><Amount amount={c.amount} original={c.original} t={t} /></td>
+          <td className="px-4 py-1.5"><Amount amount={c.estimated} original={c.estimatedOriginal} t={t} /></td>
         </tr>
       ))}
     </tbody>

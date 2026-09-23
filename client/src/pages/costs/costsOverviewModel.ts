@@ -32,6 +32,8 @@ export interface OverviewCategoryLine extends OverviewSplit {
   amount: string | null
   /** In the trip currency, only when that is not the display currency. */
   original: string | null
+  estimated: string | null
+  estimatedOriginal: string | null
 }
 
 export interface OverviewTripRow extends OverviewSplit {
@@ -44,12 +46,15 @@ export interface OverviewTripRow extends OverviewSplit {
   amount: string | null
   /** The trip total in the trip currency, only when that is not the display currency. */
   original: string | null
+  estimated: string | null
+  estimatedOriginal: string | null
   categories: OverviewCategoryLine[]
 }
 
 export interface OverviewTotals extends OverviewSplit {
   amount: string
-  categories: ({ category: CostCategory; amount: string } & OverviewSplit)[]
+  estimated: string
+  categories: ({ category: CostCategory; amount: string; estimated: string } & OverviewSplit)[]
 }
 
 export interface OverviewView {
@@ -137,10 +142,14 @@ function tripRow(trip: CostsOverviewTrip, display: string, locale: string, colum
     itemCount: trip.item_count,
     amount: inDisplay(trip.display_total),
     original: trip.item_count > 0 ? inTrip(trip.total, trip.display_total) : null,
+    estimated: inDisplay(trip.estimated_display_total),
+    estimatedOriginal: trip.estimated_total !== 0 ? inTrip(trip.estimated_total, trip.estimated_display_total) : null,
     categories: trip.categories.map(c => ({
       category: c.category,
       amount: inDisplay(c.display_total),
       original: inTrip(c.total, c.display_total),
+      estimated: inDisplay(c.estimated_display_total),
+      estimatedOriginal: c.estimated_total !== 0 ? inTrip(c.estimated_total, c.estimated_display_total) : null,
       ...tripSplit(c, columns, trip, display, money),
     })),
     ...tripSplit(trip, columns, trip, display, money),
@@ -156,9 +165,11 @@ export function buildOverviewView(data: CostsOverviewResponse, locale: string): 
     rows: data.trips.map(t => tripRow(t, display, locale, people)),
     totals: {
       amount: money(data.total, display),
+      estimated: money(data.estimated_total, display),
       categories: data.categories.map(c => ({
         category: c.category,
         amount: money(c.total, display),
+        estimated: money(c.estimated_total, display),
         ...globalSplit(c, people, display, money),
       })),
       ...globalSplit(data, people, display, money),

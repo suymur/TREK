@@ -9,6 +9,8 @@ const costsOverview: TranslationStrings = {
   'costsOverview.byCategory': 'Theo danh mục',
   'costsOverview.trip': 'Chuyến đi',
   'costsOverview.expenses': 'Khoản chi',
+  'costsOverview.final': 'Final',
+  'costsOverview.estimated': 'Estimated',
   'costsOverview.total': 'Tổng',
   'costsOverview.allTrips': 'Tất cả chuyến đi',
   'costsOverview.empty': 'Bạn chưa có chuyến đi nào.',
