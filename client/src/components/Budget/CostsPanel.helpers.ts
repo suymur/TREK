@@ -11,7 +11,7 @@
  * Amounts are the raw input strings, parsed on use (same as customAmounts).
  */
 
-import type { BudgetParticipantFinal } from '@trek/shared'
+import type { BudgetCostTotals, BudgetParticipantFinal } from '@trek/shared'
 import { currencyDecimals } from '../../utils/formatters'
 
 // The split and receipt fields guard their own precision on every keystroke, so the
@@ -21,6 +21,48 @@ import { currencyDecimals } from '../../utils/formatters'
 // value a field accepts today can become uneditable.
 export const amountPattern = (currency: string, signed: boolean) =>
   new RegExp(`^${signed ? '-?' : ''}\\d*\\.?\\d{0,${Math.max(2, currencyDecimals(currency))}}$`)
+
+/**
+ * True when the expense is only a planned cost. Anything else is final, which
+ * includes a row cached before the field existed: the server migrated every
+ * such row to `final`, so reading a missing status as final is the same answer.
+ */
+export function isEstimate(item: { cost_status?: string | null }): boolean {
+  return item.cost_status === 'estimate'
+}
+
+/**
+ * The trip's cost by status: `final` is what has really been spent,
+ * `estimated` what is still only planned, and `planned` the two together.
+ * `amountOf` converts one expense to the display currency; the desktop panel
+ * and the phone tab each pass their own, so both shells show the same three
+ * figures from the same rule.
+ */
+export function costStatusTotals<T extends { cost_status?: string | null }>(
+  items: T[],
+  amountOf: (item: T) => number,
+): BudgetCostTotals {
+  let final = 0
+  let estimated = 0
+  for (const e of items) {
+    if (isEstimate(e)) estimated += amountOf(e)
+    else final += amountOf(e)
+  }
+  return { final, estimated, planned: final + estimated }
+}
+
+/**
+ * The line under the Estimate / Final switch in the expense dialog. Turning a
+ * saved estimate final keeps the amount it was entered with, so the dialog
+ * says so and leaves the amount field for the user to correct; otherwise it
+ * explains what an estimate does to the totals and the settlement.
+ */
+export function costStatusHintKey(
+  editing: { cost_status?: string | null } | null | undefined,
+  status: string,
+): 'costs.status.finalHint' | 'costs.status.hint' {
+  return editing && isEstimate(editing) && status === 'final' ? 'costs.status.finalHint' : 'costs.status.hint'
+}
 
 /**
  * Spread `amount` across `n` payers in whole cents so the parts sum back exactly.

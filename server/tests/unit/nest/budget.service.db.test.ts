@@ -1156,3 +1156,107 @@ describe('an expense whose split leaves a remainder', () => {
     expect(after.id).toBe(before.id);
   });
 });
+
+describe('estimate / final cost status (fork #3)', () => {
+  function statusOf(itemId: number): string {
+    return (testDb.prepare('SELECT cost_status FROM budget_items WHERE id = ?').get(itemId) as { cost_status: string }).cost_status;
+  }
+
+  function seedPair() {
+    const { user: alice } = createUser(testDb, { username: 'alice' });
+    const { user: bob } = createUser(testDb, { username: 'bob' });
+    const trip = createTrip(testDb, alice.id, { title: 'Trip' });
+    addTripMember(testDb, trip.id, bob.id);
+    const members = [{ user_id: alice.id }, { user_id: bob.id }];
+    return { alice, bob, trip, members };
+  }
+
+  it('BUDGET-SVC-DB-STATUS-001: a new expense is final unless the caller says estimate', () => {
+    const { trip } = seedPair();
+    const plain = budget.createBudgetItem(trip.id, { name: 'Hotel', total_price: 100 });
+    const est = budget.createBudgetItem(trip.id, { name: 'Museum', total_price: 30, cost_status: 'estimate' });
+    expect(plain.cost_status).toBe('final');
+    expect(est.cost_status).toBe('estimate');
+    expect(budget.listBudgetItems(trip.id).map(i => i.cost_status)).toEqual(['final', 'estimate']);
+  });
+
+  it('BUDGET-SVC-DB-STATUS-002: an update switches the status and keeps it when not mentioned', () => {
+    const { trip } = seedPair();
+    const item = budget.createBudgetItem(trip.id, { name: 'Museum', total_price: 30, cost_status: 'estimate' });
+
+    budget.updateBudgetItem(item.id, trip.id, { name: 'Museum tickets' });
+    expect(statusOf(item.id)).toBe('estimate');
+
+    // Turning it final keeps the amount; a corrected amount rides along in the same save.
+    const updated = budget.updateBudgetItem(item.id, trip.id, { cost_status: 'final', total_price: 34.5 });
+    expect(updated!.cost_status).toBe('final');
+    expect(updated!.total_price).toBe(34.5);
+  });
+
+  it('BUDGET-SVC-DB-STATUS-003: the column refuses a value outside estimate/final', () => {
+    const { trip } = seedPair();
+    const item = budget.createBudgetItem(trip.id, { name: 'Hotel', total_price: 100 });
+    expect(() => testDb.prepare("UPDATE budget_items SET cost_status = 'maybe' WHERE id = ?").run(item.id)).toThrow();
+  });
+
+  it('BUDGET-SVC-DB-STATUS-004: an estimate does not change the settlement', () => {
+    const { alice, bob, trip, members } = seedPair();
+    budget.createBudgetItem(trip.id, { name: 'Dinner', payers: [{ user_id: alice.id, amount: 100 }], members });
+    const before = budget.calculateSettlement(trip.id);
+
+    // Paid by Bob and split between both: as a final expense this would square the trip.
+    budget.createBudgetItem(trip.id, { name: 'Hotel', payers: [{ user_id: bob.id, amount: 100 }], members, cost_status: 'estimate' });
+    const after = budget.calculateSettlement(trip.id);
+
+    expect(after.balances).toEqual(before.balances);
+    expect(after.flows).toEqual(before.flows);
+    expect(after.finalBudgets).toEqual(before.finalBudgets);
+    expect(after.flows).toEqual([
+      expect.objectContaining({ from: expect.objectContaining({ user_id: bob.id }), to: expect.objectContaining({ user_id: alice.id }), amount: 50 }),
+    ]);
+  });
+
+  it('BUDGET-SVC-DB-STATUS-005: turning the estimate final brings it into the settlement', () => {
+    const { alice, bob, trip, members } = seedPair();
+    budget.createBudgetItem(trip.id, { name: 'Dinner', payers: [{ user_id: alice.id, amount: 100 }], members });
+    const hotel = budget.createBudgetItem(trip.id, { name: 'Hotel', payers: [{ user_id: bob.id, amount: 100 }], members, cost_status: 'estimate' });
+
+    budget.updateBudgetItem(hotel.id, trip.id, { cost_status: 'final' });
+    const result = budget.calculateSettlement(trip.id);
+    expect(result.flows).toEqual([]);
+    expect(result.balances.map(b => b.balance)).toEqual([0, 0]);
+  });
+
+  it('BUDGET-SVC-DB-STATUS-006: totals split final and estimated, and planned is their sum', () => {
+    const { alice, trip, members } = seedPair();
+    budget.createBudgetItem(trip.id, { name: 'Dinner', payers: [{ user_id: alice.id, amount: 100.01 }], members });
+    budget.createBudgetItem(trip.id, { name: 'Unpaid taxi', total_price: 20, members });
+    budget.createBudgetItem(trip.id, { name: 'Hotel', total_price: 250.5, cost_status: 'estimate' });
+    budget.createBudgetItem(trip.id, { name: 'Museum', payers: [{ user_id: alice.id, amount: 30 }], members, cost_status: 'estimate' });
+
+    const { totals } = budget.calculateSettlement(trip.id);
+    expect(totals).toEqual({ final: 120.01, estimated: 280.5, planned: 400.51 });
+  });
+
+  it('BUDGET-SVC-DB-STATUS-007: the balances still sum to zero with estimates in a foreign display currency', () => {
+    const { trip, me, danil } = seedIssue1543Trip('RUB');
+    budget.createBudgetItem(trip.id, {
+      name: 'Estimate', currency: 'RUB', cost_status: 'estimate',
+      payers: [{ user_id: danil.id, amount: 5000 }], members: [{ user_id: me.id }, { user_id: danil.id }],
+    });
+    const result = budget.calculateSettlement(trip.id, { base: 'EUR', tripCurrency: 'RUB', rates: RATES.EUR });
+    const sumCents = result.balances.reduce((a, b) => a + Math.round(b.balance * 100), 0);
+    expect(sumCents).toBe(0);
+    expect(Math.round(result.totals.planned * 100)).toBe(Math.round(result.totals.final * 100) + Math.round(result.totals.estimated * 100));
+    expect(result.totals.estimated).toBeGreaterThan(0);
+  });
+
+  it('BUDGET-SVC-DB-STATUS-008: the per-person summary counts final expenses only', () => {
+    const { alice, trip, members } = seedPair();
+    budget.createBudgetItem(trip.id, { name: 'Dinner', total_price: 100, member_ids: members.map(m => m.user_id) });
+    budget.createBudgetItem(trip.id, { name: 'Hotel', total_price: 300, member_ids: members.map(m => m.user_id), cost_status: 'estimate' });
+    const row = budget.getPerPersonSummary(trip.id).find(r => r.user_id === alice.id)!;
+    expect(row.total_assigned).toBe(50);
+    expect(row.items_count).toBe(1);
+  });
+});

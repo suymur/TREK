@@ -882,6 +882,24 @@ describe('folded trip CRUD', () => {
     expect(testDb.prepare('SELECT COUNT(*) c FROM roadtrip_vias WHERE day_id = ?').get(days[0].id)).toEqual({ c: 2 });
   });
 
+  it('TRIP-SVC-062: copying a trip keeps an estimate an estimate', () => {
+    const { user } = createUser(testDb);
+    const trip = createTrip(testDb, user.id, { title: 'Origin', start_date: '2025-06-01', end_date: '2025-06-02' });
+    testDb.prepare("INSERT INTO budget_items (trip_id, category, name, total_price, cost_status) VALUES (?, 'food', 'Planned', 50, 'estimate')").run(trip.id);
+    testDb.prepare("INSERT INTO budget_items (trip_id, category, name, total_price) VALUES (?, 'food', 'Spent', 20)").run(trip.id);
+
+    const newTripId = svc.copy(trip.id, user.id, 'Clone');
+
+    // Without cost_status on the duplicate INSERT the estimate falls back to the
+    // column default and lands in the copy's settlement as a real cost.
+    const rows = testDb.prepare('SELECT name, cost_status FROM budget_items WHERE trip_id = ? ORDER BY name')
+      .all(newTripId) as any[];
+    expect(rows).toEqual([
+      { name: 'Planned', cost_status: 'estimate' },
+      { name: 'Spent', cost_status: 'final' },
+    ]);
+  });
+
   it('TRIP-SVC-060: copying a trip keeps a staged booking staged', () => {
     const { user } = createUser(testDb);
     const trip = createTrip(testDb, user.id, { title: 'Origin', start_date: '2025-06-01', end_date: '2025-06-02' });

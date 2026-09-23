@@ -6,6 +6,7 @@ import {
 } from '../../nest-mcp';
 import { McpToolGuardsService } from '../mcp-shared/mcp-tool-guards.service';
 import { z } from 'zod';
+import { costStatusSchema, type CostStatus } from '@trek/shared';
 import { RuntimeEnvService } from '../app-config/runtime-env.service';
 import { isDemoUserId } from '../common/demo-write';
 import { ADDON_IDS } from '../../addons';
@@ -29,6 +30,9 @@ const payersSchema = z.array(z.strictObject({
   user_id: z.number().int().positive(),
   amount: z.number(),
 })).describe('Who actually paid, and how much each paid, in the expense currency. Ask the user; do not guess.');
+
+/** Reusable Zod shape for the estimate/final flag, with the rule the model has to know. */
+const costStatusInput = costStatusSchema.describe('"estimate" for a planned cost that has not happened yet, "final" for the real cost. Estimates count toward the planned total but never enter the settlement (who owes whom). Defaults to "final" on create.');
 
 /** Reusable Zod shape for an unequal split: what each participant owes. Signed, like the REST contract (#2176). */
 const splitMembersSchema = z.array(z.strictObject({
@@ -190,16 +194,18 @@ export class BudgetMcp {
       expense_date: z.string().max(40).nullable().optional().describe('Date the expense occurred, YYYY-MM-DD'),
       place_id: z.number().int().positive().optional().describe('Place on this trip the expense belongs to (the museum ticket for that museum), linking it in the planner'),
       note: z.string().max(500).optional(),
+      cost_status: costStatusInput.optional(),
     },
     annotations: TOOL_ANNOTATIONS_NON_IDEMPOTENT,
     when: budgetAddonOn,
     access: { group: 'budget', mode: 'write' },
   })
   async createBudgetItem(
-    { tripId, name, category, total_price, currency, member_ids, members, payers, expense_date, place_id, note }: {
+    { tripId, name, category, total_price, currency, member_ids, members, payers, expense_date, place_id, note, cost_status }: {
       tripId: number; name: string; category?: string; total_price: number; currency?: string | null;
       member_ids?: number[]; members?: { user_id: number; amount: number }[];
       payers?: { user_id: number; amount: number }[]; expense_date?: string | null; place_id?: number; note?: string;
+      cost_status?: CostStatus;
     },
     ctx: McpContext,
   ) {
@@ -215,7 +221,7 @@ export class BudgetMcp {
     // The split participants are the members of an uneven split; the equal-split
     // list still carries them so the row's `persons` count comes out the same.
     const splitIds = members ? members.map(m => m.user_id) : this.resolveMemberIds(tripId, member_ids);
-    const itemData = { category, name, total_price, currency, member_ids: splitIds, members, payers, expense_date, place_id, note };
+    const itemData = { category, name, total_price, currency, member_ids: splitIds, members, payers, expense_date, place_id, note, cost_status };
     // Freeze the live FX rate at entry time so a settled position isn't re-opened
     // when live rates drift (#1445) — same as the REST create path.
     await this.budget.freezeForeignRate(tripId, itemData);
@@ -264,17 +270,18 @@ export class BudgetMcp {
       days: z.number().int().positive().nullable().optional(),
       expense_date: z.string().max(40).nullable().optional().describe('Date the expense occurred, YYYY-MM-DD; null clears it. Omit to leave unchanged.'),
       note: z.string().max(500).nullable().optional(),
+      cost_status: costStatusInput.optional().describe('Switch between "estimate" (planned, kept out of the settlement) and "final" (the real cost). Turning an estimate final keeps its amount; send total_price too if the real cost differs. Omit to leave unchanged.'),
     },
     annotations: TOOL_ANNOTATIONS_WRITE,
     when: budgetAddonOn,
     access: { group: 'budget', mode: 'write' },
   })
   async updateBudgetItem(
-    { tripId, itemId, name, category, total_price, currency, member_ids, members, payers, persons, days, expense_date, note }: {
+    { tripId, itemId, name, category, total_price, currency, member_ids, members, payers, persons, days, expense_date, note, cost_status }: {
       tripId: number; itemId: number; name?: string; category?: string; total_price?: number; currency?: string | null;
       member_ids?: number[]; members?: { user_id: number; amount: number }[];
       payers?: { user_id: number; amount: number }[]; persons?: number | null; days?: number | null;
-      expense_date?: string | null; note?: string | null;
+      expense_date?: string | null; note?: string | null; cost_status?: CostStatus;
     },
     ctx: McpContext,
   ) {
@@ -292,7 +299,7 @@ export class BudgetMcp {
     }
     // Freeze-then-write composite: a currency change re-freezes the rate at entry
     // time (#1445) on the same code path the REST update uses.
-    const item = await this.budget.update(itemId, tripId, { name, category, total_price, currency, member_ids, members, payers, persons, days, expense_date, note });
+    const item = await this.budget.update(itemId, tripId, { name, category, total_price, currency, member_ids, members, payers, persons, days, expense_date, note, cost_status });
     if (!item) return errorResult('Budget item not found.');
     this.guards.safeBroadcast(tripId, 'budget:updated', { item });
     return ok({ item });
@@ -390,7 +397,7 @@ export class BudgetMcp {
 
   @Tool({
     name: 'get_settlement_summary',
-    description: "See each member's net balance, the suggested payments to settle shared expenses, and what the trip finally costs each member once every reimbursement is accounted for (`finalBudgets`, each figure with the rows it is made of under `sources`). Amounts are in the trip's base currency. Call this before recording a settlement so you know who should pay whom and how much.",
+    description: "See each member's net balance, the suggested payments to settle shared expenses, and what the trip finally costs each member once every reimbursement is accounted for (`finalBudgets`, each figure with the rows it is made of under `sources`). `totals` gives the trip cost as `final` (real costs), `estimated` (planned costs) and `planned` (the two together); estimates never enter the balances or payments. Amounts are in the trip's base currency. Call this before recording a settlement so you know who should pay whom and how much.",
     inputSchema: {
       tripId: z.number().int().positive(),
       base: z.string().max(10).optional().describe('ISO currency code to compute balances in; defaults to the trip currency'),

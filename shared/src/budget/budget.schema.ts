@@ -83,6 +83,30 @@ export function typeToCostCategory(type: string | null | undefined): CostCategor
 }
 
 /**
+ * Whether an expense is a planned cost (`estimate`) or the real one (`final`).
+ * Estimates count toward the planned total but never enter the settlement:
+ * only final expenses create debts between members. Rows written before the
+ * field existed are `final` (the migration default), and so is a new expense
+ * whose caller does not say otherwise.
+ */
+export const COST_STATUSES = ['estimate', 'final'] as const;
+export const costStatusSchema = z.enum(COST_STATUSES);
+export type CostStatus = z.infer<typeof costStatusSchema>;
+
+/**
+ * The trip's cost totals by status, in whatever display currency was asked
+ * for: `final` is what has really been spent, `estimated` what is still only
+ * planned, and `planned = final + estimated` to the cent (the server derives
+ * all three from the same integer cents).
+ */
+export const budgetCostTotalsSchema = z.object({
+  final: z.number(),
+  estimated: z.number(),
+  planned: z.number(),
+});
+export type BudgetCostTotals = z.infer<typeof budgetCostTotalsSchema>;
+
+/**
  * One payer of an expense — a row of budget_item_payers. `amount` is in the
  * expense's own currency (budget_items.currency). Several payers can split who
  * actually paid one bill. Username/avatar are joined for display.
@@ -133,6 +157,7 @@ export const budgetItemSchema = z.object({
   place_id: z.number().nullable().optional(),
   paid_by_user_id: z.number().nullable().optional(),
   expense_date: z.string().nullable().optional(),
+  cost_status: costStatusSchema.optional(),
   sort_order: z.number().optional(),
   created_at: z.string().optional(),
   members: z.array(budgetItemMemberSchema).optional(),
@@ -168,6 +193,8 @@ export const budgetCreateItemRequestSchema = z.object({
   note: z.string().nullable().optional(),
   ticket_json: z.string().nullable().optional(),
   expense_date: z.string().nullable().optional(),
+  // Estimate (planned) or final (real) cost; omitted means final.
+  cost_status: costStatusSchema.optional(),
   // Link this expense to a reservation (e.g. created from a booking's
   // "add expense" flow). The server stores it on budget_items.reservation_id.
   reservation_id: z.number().optional(),
@@ -194,6 +221,7 @@ export const budgetUpdateItemRequestSchema = z.object({
   note: z.string().nullable().optional(),
   ticket_json: z.string().nullable().optional(),
   expense_date: z.string().nullable().optional(),
+  cost_status: costStatusSchema.optional(),
   receipt_file_ids: z.array(z.number()).optional(),
 });
 export type BudgetUpdateItemRequest = z.infer<typeof budgetUpdateItemRequestSchema>;
