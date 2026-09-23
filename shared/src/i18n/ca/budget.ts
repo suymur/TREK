@@ -123,6 +123,19 @@ const budget: TranslationStrings = {
   'costs.cat.fuel': 'Combustible',
   'costs.cat.parking': 'Aparcament',
   'costs.cat.other': 'Altres',
+  'costs.customCat.new': 'Categoria nova',
+  'costs.customCat.edit': 'Edita la categoria',
+  'costs.customCat.name': 'Nom',
+  'costs.customCat.namePlaceholder': 'p. ex. Decoració',
+  'costs.customCat.icon': 'Icona',
+  'costs.customCat.color': 'Color',
+  'costs.customCat.shared': 'Tothom en aquest servidor veu les categories personalitzades i les pot fer servir.',
+  'costs.customCat.delete': 'Suprimeix la categoria',
+  'costs.customCat.deleteConfirm': 'Vols suprimir «{name}»? Les seves despeses passen a Altres, a tots els viatges.',
+  'costs.customCat.deleted': 'Categoria suprimida. {count} despeses han passat a Altres.',
+  'costs.customCat.duplicate': 'Ja hi ha una categoria amb aquest nom.',
+  'costs.customCat.notAllowed': 'Només qui l’ha creada o un administrador pot canviar aquesta categoria.',
+  'costs.customCat.offline': 'Les categories només es poden canviar amb connexió.',
   'costs.daysCount': '{count} dies',
   'costs.travelers': '{count} viatgers',
   'costs.liveRate': 'tipus de canvi actual',
@@ -165,7 +178,8 @@ const budget: TranslationStrings = {
   'costs.noReceipts': 'Cap rebut adjunt',
   'costs.deleteReceipt': 'Eliminar rebut',
   'costs.viewReceipt': 'Veure rebut',
-  'costs.receiptLeftBehind': 'No es pot desar i encara hi ha {count} rebuts pujats. Elimina aquests fitxers a la pestanya Fitxers.',
+  'costs.receiptLeftBehind':
+    'No es pot desar i encara hi ha {count} rebuts pujats. Elimina aquests fitxers a la pestanya Fitxers.',
 };
 
 export default budget;

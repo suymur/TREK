@@ -1,11 +1,12 @@
 import React from 'react'
 import { ChevronRight } from 'lucide-react'
-import type { CostCategory } from '@trek/shared'
+import type { CostCategoryKey } from '@trek/shared'
 import { useTranslation } from '../i18n'
 import PageShell from '../components/Layout/PageShell'
 import EmptyState from '../components/shared/EmptyState'
 import { Spinner } from '../components/shared/Spinner'
-import { COST_CAT_META } from '../components/Budget/costsCategories'
+import { categoryLabel } from '../components/Budget/costsCategories'
+import { useCostCategoryIndex } from '../components/Budget/useCostCategories'
 import RingAvatar from '../components/Budget/BudgetPanelRingAvatar'
 import { useCostsOverview } from './costs/useCostsOverview'
 import type { OverviewSplit, OverviewTripRow, OverviewView } from './costs/costsOverviewModel'
@@ -75,12 +76,12 @@ function Toggle({ checked, onChange, label }: {
   )
 }
 
-function CategoryName({ category, t }: { category: CostCategory; t: T }): React.ReactElement {
-  const meta = COST_CAT_META[category]
+function CategoryName({ category, t }: { category: CostCategoryKey; t: T }): React.ReactElement {
+  const meta = useCostCategoryIndex().meta(category)
   return (
     <span className="inline-flex items-center gap-2 text-content-secondary">
       <meta.Icon className="w-3.5 h-3.5 flex-shrink-0" style={{ color: meta.color }} />
-      {t(meta.labelKey)}
+      {categoryLabel(meta, t)}
     </span>
   )
 }

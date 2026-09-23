@@ -29,10 +29,11 @@ export const budgetItemMemberSchema = z.object({
 export type BudgetItemMember = z.infer<typeof budgetItemMemberSchema>;
 
 /**
- * The fixed "Costs" expense categories. Unlike the old budget, users cannot
- * create their own categories — every expense maps to one of these keys. The
- * label/icon/colour per key live in the client; the server only stores the key.
- * Pre-rework rows used free-text categories; those are shown as `other`.
+ * The fixed "Costs" expense categories. The label/icon/colour per key live in
+ * the client; the server only stores the key. Users can add their own custom
+ * categories next to these (#4, cost-categories.schema.ts); an expense in one
+ * stores `custom:<id>`. Pre-rework rows used free-text categories; those map
+ * through resolveCostCategory and are shown as `other` when nothing matches.
  */
 export const COST_CATEGORIES = [
   'accommodation',

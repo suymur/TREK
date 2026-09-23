@@ -124,6 +124,19 @@ const budget: TranslationStrings = {
   'costs.cat.fuel': 'Пальне',
   'costs.cat.parking': 'Паркування',
   'costs.cat.other': 'Інше',
+  'costs.customCat.new': 'Нова категорія',
+  'costs.customCat.edit': 'Редагувати категорію',
+  'costs.customCat.name': 'Назва',
+  'costs.customCat.namePlaceholder': 'напр. Декор',
+  'costs.customCat.icon': 'Значок',
+  'costs.customCat.color': 'Колір',
+  'costs.customCat.shared': 'Власні категорії бачать і можуть використовувати всі на цьому сервері.',
+  'costs.customCat.delete': 'Видалити категорію',
+  'costs.customCat.deleteConfirm': 'Видалити «{name}»? Її витрати в усіх подорожах перейдуть до «Інше».',
+  'costs.customCat.deleted': 'Категорію видалено. Витрат перенесено до «Інше»: {count}.',
+  'costs.customCat.duplicate': 'Категорія з такою назвою вже існує.',
+  'costs.customCat.notAllowed': 'Змінити цю категорію може лише її автор або адміністратор.',
+  'costs.customCat.offline': 'Категорії можна змінювати лише онлайн.',
   'costs.daysCount': '{count} днів',
   'costs.travelers': '{count} мандрівників',
   'costs.liveRate': 'поточний курс',
@@ -165,6 +178,7 @@ const budget: TranslationStrings = {
   'costs.noReceipts': 'Немає доданих чеків',
   'costs.deleteReceipt': 'Видалити чек',
   'costs.viewReceipt': 'Переглянути чек',
-  'costs.receiptLeftBehind': 'Не вдалося зберегти, {count} завантажених чеків залишилися. Видаліть їх на вкладці «Файли».',
+  'costs.receiptLeftBehind':
+    'Не вдалося зберегти, {count} завантажених чеків залишилися. Видаліть їх на вкладці «Файли».',
 };
 export default budget;

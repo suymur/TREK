@@ -6,6 +6,7 @@ import { PermissionsService } from '../permissions/permissions.service';
 import { avatarUrl } from '../common/avatarUrl';
 import type { User, BudgetItem, BudgetItemMember, BudgetItemPayer, BudgetItemReceipt } from '../../types';
 import { ExchangeRatesService } from './exchange-rates.service';
+import { storedExpenseCategory } from '../cost-categories/cost-categories.helpers';
 import { assertInstallmentAllocations, assertInstallmentsFit, installmentAmounts, InstallmentAllocationError } from './budget-installments';
 
 type Trip = TripAccess;
@@ -167,6 +168,11 @@ export class BudgetService {
   // -------------------------------------------------------------------------
   // Helpers
   // -------------------------------------------------------------------------
+
+  /** A `custom:<id>` without a category is stored as `other` (#4, storedExpenseCategory). */
+  private storedCategory(category: string | undefined): string | undefined {
+    return storedExpenseCategory(category, (id) => !!this.db.get('SELECT 1 FROM cost_categories WHERE id = ?', id));
+  }
 
   private loadItemMembers(itemId: number | string) {
     const rows = this.db.all<BudgetItemMember>(`
@@ -656,7 +662,7 @@ export class BudgetService {
       const maxOrder = this.db.get<{ max: number | null }>('SELECT MAX(sort_order) as max FROM budget_items WHERE trip_id = ?', tripId)!;
       const sortOrder = (maxOrder.max !== null ? maxOrder.max : -1) + 1;
 
-      const cat = data.category || 'other';
+      const cat = this.storedCategory(data.category) || 'other';
 
       // Ensure category has a sort_order entry
       const catExists = this.db.get('SELECT 1 FROM budget_category_order WHERE trip_id = ? AND category = ?', tripId, cat);
@@ -774,6 +780,7 @@ export class BudgetService {
       // An old client sending a receipt in `note` still lands in ticket_json, and
       // its note is left untouched rather than clobbered with the receipt blob.
       const { note, ticket } = splitLegacyTicketNote(data.note, data.ticket_json);
+      const category = this.storedCategory(data.category);
       const noteTouched = data.note !== undefined && note !== undefined;
       const ticketTouched = data.ticket_json !== undefined || ticket !== undefined;
 
@@ -793,7 +800,7 @@ export class BudgetService {
       cost_status = COALESCE(?, cost_status)
     WHERE id = ?
   `,
-        data.category || null,
+        category || null,
         data.name || null,
         data.total_price !== undefined ? 1 : null, data.total_price !== undefined ? data.total_price : 0,
         data.currency !== undefined ? 1 : 0, data.currency !== undefined ? (data.currency || null) : null,
@@ -835,12 +842,12 @@ export class BudgetService {
       }
 
       // If category changed, update category order table
-      if (data.category) {
-        const catExists = this.db.get('SELECT 1 FROM budget_category_order WHERE trip_id = ? AND category = ?', tripId, data.category);
+      if (category) {
+        const catExists = this.db.get('SELECT 1 FROM budget_category_order WHERE trip_id = ? AND category = ?', tripId, category);
         if (!catExists) {
           const maxCatOrder = this.db.get<{ max: number | null }>('SELECT MAX(sort_order) as max FROM budget_category_order WHERE trip_id = ?', tripId);
           const catOrder = (maxCatOrder?.max !== null && maxCatOrder?.max !== undefined ? maxCatOrder.max : -1) + 1;
-          this.db.run('INSERT OR IGNORE INTO budget_category_order (trip_id, category, sort_order) VALUES (?, ?, ?)', tripId, data.category, catOrder);
+          this.db.run('INSERT OR IGNORE INTO budget_category_order (trip_id, category, sort_order) VALUES (?, ?, ?)', tripId, category, catOrder);
         }
       }
 

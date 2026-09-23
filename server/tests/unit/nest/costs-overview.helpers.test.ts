@@ -285,6 +285,20 @@ describe('buildCostsOverview — per person', () => {
 });
 
 describe('buildCostsOverview — final and estimated', () => {
+  it('keeps custom categories across final and estimated totals', () => {
+    const final = item(1, 'custom:7', 12, { cost_status: 'final' });
+    const estimate = item(1, 'custom:7', 4, { cost_status: 'estimate' });
+    const removed = item(1, 'custom:8', 2, { cost_status: 'estimate' });
+    const out = buildCostsOverview([trip(1, 'EUR')], [final, estimate, removed], [member(final, 1)], 'EUR', null, [7]);
+    expect(out.trips[0]!.categories.map(c => [c.category, c.total, c.estimated_total])).toEqual([
+      ['other', 0, 2], ['custom:7', 12, 4],
+    ]);
+    expect(out.categories.map(c => [c.category, c.total, c.estimated_total])).toEqual([
+      ['other', 0, 2], ['custom:7', 12, 4],
+    ]);
+    expect(out.people).toEqual([{ user_id: 1, total: 12 }]);
+  });
+
   it('keeps estimates out of per-person shares while grouping both statuses by category', () => {
     const final = item(1, 'food', 10, { cost_status: 'final' });
     const estimate = item(1, 'food', 7, { cost_status: 'estimate' });

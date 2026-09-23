@@ -5,6 +5,7 @@ import { TripMembershipService } from '../trip-membership/trip-membership.servic
 import { SettingsService } from '../settings/settings.service';
 import { AddonsService } from '../addons/addons.service';
 import { ExchangeRatesService } from '../budget/exchange-rates.service';
+import { CostCategoriesService } from '../cost-categories/cost-categories.service';
 import { ADDON_IDS } from '../../addons';
 import { avatarUrl } from '../common/avatarUrl';
 import {
@@ -36,6 +37,7 @@ export class CostsOverviewService {
     private readonly settings: SettingsService,
     private readonly exchangeRates: ExchangeRatesService,
     private readonly addons: AddonsService,
+    private readonly costCategories: CostCategoriesService,
   ) {}
 
   isEnabled(): boolean {
@@ -52,7 +54,8 @@ export class CostsOverviewService {
       trips.map(tripCurrencyOf),
     );
     const rates = needsLiveRates(trips, items, display) ? await this.exchangeRates.getRates(display) : null;
-    return buildCostsOverview(trips, items, members, display, rates);
+    const customIds = this.costCategories.list().map((c) => c.id);
+    return buildCostsOverview(trips, items, members, display, rates, customIds);
   }
 
   /** The trip rows in the order of `ids` (newest first). */

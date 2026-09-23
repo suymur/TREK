@@ -1,4 +1,4 @@
-import type { RoadtripPreferences } from '@trek/shared';
+import type { CostCategoryRecord, RoadtripPreferences } from '@trek/shared';
 import Dexie, { type Table } from 'dexie';
 import type { Trip, Day, Place, PackingItem, TodoItem, BudgetItem, Reservation, TripFile, Accommodation, TripMember, Tag, Category } from '../types';
 
@@ -174,6 +174,7 @@ class TrekOfflineDb extends Dexie {
   tripMembers!: Table<CachedTripMember, [number, number]>;
   tags!: Table<Tag, number>;
   categories!: Table<Category, number>;
+  costCategories!: Table<CostCategoryRecord, number>;
   mutationQueue!: Table<QueuedMutation, string>;
   syncMeta!: Table<SyncMeta, number>;
   blobCache!: Table<BlobCacheEntry, string>;
@@ -246,6 +247,10 @@ class TrekOfflineDb extends Dexie {
         delete row.areaPlacesKey;
       });
     });
+
+    // v9: the custom cost categories every user of the instance shares (#4), so
+    // an expense in one keeps its name, icon and colour offline.
+    this.version(9).stores({ costCategories: 'id' });
   }
 }
 

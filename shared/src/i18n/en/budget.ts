@@ -131,6 +131,19 @@ const budget: TranslationStrings = {
   'costs.cat.fuel': 'Fuel',
   'costs.cat.parking': 'Parking',
   'costs.cat.other': 'Other',
+  'costs.customCat.new': 'New category',
+  'costs.customCat.edit': 'Edit category',
+  'costs.customCat.name': 'Name',
+  'costs.customCat.namePlaceholder': 'e.g. Decoration',
+  'costs.customCat.icon': 'Icon',
+  'costs.customCat.color': 'Color',
+  'costs.customCat.shared': 'Everyone on this server sees custom categories and can use them.',
+  'costs.customCat.delete': 'Delete category',
+  'costs.customCat.deleteConfirm': 'Delete "{name}"? Its expenses move to Other, on every trip.',
+  'costs.customCat.deleted': 'Category deleted. {count} expenses moved to Other.',
+  'costs.customCat.duplicate': 'A category with this name already exists.',
+  'costs.customCat.notAllowed': 'Only the creator or an admin can change this category.',
+  'costs.customCat.offline': 'Categories can only be changed while online.',
   'costs.daysCount': '{count} days',
   'costs.travelers': '{count} travelers',
   'costs.liveRate': 'live rate',
@@ -165,7 +178,8 @@ const budget: TranslationStrings = {
   'costs.noReceipts': 'No receipts attached',
   'costs.deleteReceipt': 'Remove receipt',
   'costs.viewReceipt': 'View receipt',
-  'costs.receiptLeftBehind': 'Save failed, and {count} uploaded receipts are still there. Remove them in the Files tab.',
+  'costs.receiptLeftBehind':
+    'Save failed, and {count} uploaded receipts are still there. Remove them in the Files tab.',
 };
 
 export default budget;

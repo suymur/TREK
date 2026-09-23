@@ -5,10 +5,11 @@ import { BudgetModule } from '../budget/budget.module';
 import { SettingsModule } from '../settings/settings.module';
 import { AddonsModule } from '../addons/addons.module';
 import { TripMembershipModule } from '../trip-membership/trip-membership.module';
+import { CostCategoriesModule } from '../cost-categories/cost-categories.module';
 
 /** Cross-trip cost overview (#2). Registered in AppModule; nothing imports it. */
 @Module({
-  imports: [BudgetModule, SettingsModule, AddonsModule, TripMembershipModule],
+  imports: [BudgetModule, SettingsModule, AddonsModule, TripMembershipModule, CostCategoriesModule],
   controllers: [CostsOverviewController],
   providers: [CostsOverviewService],
 })

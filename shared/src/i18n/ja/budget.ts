@@ -124,6 +124,19 @@ const budget: TranslationStrings = {
   'costs.cat.fuel': '燃料',
   'costs.cat.parking': '駐車場',
   'costs.cat.other': 'その他',
+  'costs.customCat.new': '新しいカテゴリ',
+  'costs.customCat.edit': 'カテゴリを編集',
+  'costs.customCat.name': '名前',
+  'costs.customCat.namePlaceholder': '例: 装飾',
+  'costs.customCat.icon': 'アイコン',
+  'costs.customCat.color': '色',
+  'costs.customCat.shared': 'カスタムカテゴリはこのサーバーの全員に表示され、誰でも使えます。',
+  'costs.customCat.delete': 'カテゴリを削除',
+  'costs.customCat.deleteConfirm': '「{name}」を削除しますか？ その支出はすべての旅行で「その他」に移ります。',
+  'costs.customCat.deleted': 'カテゴリを削除しました。{count} 件の支出を「その他」に移しました。',
+  'costs.customCat.duplicate': 'この名前のカテゴリはすでにあります。',
+  'costs.customCat.notAllowed': 'このカテゴリを変更できるのは作成者か管理者だけです。',
+  'costs.customCat.offline': 'カテゴリはオンラインのときだけ変更できます。',
   'costs.daysCount': '{count}日間',
   'costs.travelers': '{count}人の旅行者',
   'costs.liveRate': 'リアルタイムレート',
@@ -165,6 +178,7 @@ const budget: TranslationStrings = {
   'costs.noReceipts': '添付されたレシートはありません',
   'costs.deleteReceipt': 'レシートを削除',
   'costs.viewReceipt': 'レシートを表示',
-  'costs.receiptLeftBehind': '保存に失敗し、アップロード済みの領収書が {count} 件残っています。ファイルタブで削除してください。',
+  'costs.receiptLeftBehind':
+    '保存に失敗し、アップロード済みの領収書が {count} 件残っています。ファイルタブで削除してください。',
 };
 export default budget;

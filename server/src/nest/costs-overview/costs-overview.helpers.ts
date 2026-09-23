@@ -1,7 +1,8 @@
 import {
   COST_CATEGORIES,
+  customCostCategoryKey,
   resolveCostCategory,
-  type CostCategory,
+  type CostCategoryKey,
   type CostsOverviewPerson,
   type CostsOverviewResponse,
   type CostsOverviewShare,
@@ -224,7 +225,10 @@ function buildOverviewPart(
   members: OverviewMemberRow[],
   display: string,
   rates: Rates,
+  customCategoryIds: readonly number[],
 ): CostsOverviewResponse {
+  const known = new Set(customCategoryIds);
+  const order: CostCategoryKey[] = [...COST_CATEGORIES, ...customCategoryIds.map(customCostCategoryKey)];
   const itemsByTrip = new Map<number, OverviewItemRow[]>();
   for (const item of items) {
     const list = itemsByTrip.get(item.trip_id);
@@ -240,7 +244,7 @@ function buildOverviewPart(
   const tripIds = new Set(trips.map((t) => t.id));
   const itemIds = new Set(items.filter((i) => tripIds.has(i.trip_id)).map((i) => i.id));
 
-  const globalCats = new Map<CostCategory, Cells>();
+  const globalCats = new Map<CostCategoryKey, Cells>();
   const globalPeople: Cells = new Map();
   let globalTotal = 0;
   let globalOpen = 0;
@@ -249,16 +253,16 @@ function buildOverviewPart(
   const rows = trips.map((trip): CostsOverviewTrip => {
     const tripCurrency = tripCurrencyOf(trip);
     const tripItems = itemsByTrip.get(trip.id) ?? [];
-    const catCells = new Map<CostCategory, Cells>();
+    const catCells = new Map<CostCategoryKey, Cells>();
     let openCents = 0;
     for (const item of tripItems) {
-      const key = resolveCostCategory(item.category);
+      const key = resolveCostCategory(item.category, known);
       const cells = catCells.get(key) ?? new Map<number, number>();
       addCells(cells, splitItemCents(item, membersByItem.get(item.id) ?? [], tripCurrency, rates));
       catCells.set(key, cells);
       if (item.open_amount) openCents += toCents({ ...item, total_price: item.open_amount }, tripCurrency, rates);
     }
-    const keys = COST_CATEGORIES.filter((k) => catCells.has(k));
+    const keys = order.filter((k) => catCells.has(k));
     const sumOf = (cells: Cells | undefined) => [...(cells?.values() ?? [])].reduce((a, c) => a + c, 0);
     const catCents = keys.map((k) => sumOf(catCells.get(k)));
     const totalCents = catCents.reduce((a, c) => a + c, 0);
@@ -326,7 +330,7 @@ function buildOverviewPart(
     total: toMoney(globalTotal),
     open_total: toMoney(globalOpen),
     estimated_total: 0,
-    categories: COST_CATEGORIES.filter((k) => globalCats.has(k)).map((category) => {
+    categories: order.filter((k) => globalCats.has(k)).map((category) => {
       const cells = globalCats.get(category) ?? new Map<number, number>();
       return {
         category,
@@ -348,11 +352,13 @@ export function buildCostsOverview(
   members: OverviewMemberRow[],
   display: string,
   rates: Rates,
+  customCategoryIds: readonly number[] = [],
 ): CostsOverviewResponse {
+  const order: CostCategoryKey[] = [...COST_CATEGORIES, ...customCategoryIds.map(customCostCategoryKey)];
   const finalItems = items.filter(item => item.cost_status !== 'estimate');
   const estimateItems = items.filter(item => item.cost_status === 'estimate');
-  const final = buildOverviewPart(trips, finalItems, members, display, rates);
-  const estimate = buildOverviewPart(trips, estimateItems, [], display, rates);
+  const final = buildOverviewPart(trips, finalItems, members, display, rates, customCategoryIds);
+  const estimate = buildOverviewPart(trips, estimateItems, [], display, rates, customCategoryIds);
   const estimateTrips = new Map(estimate.trips.map(row => [row.trip_id, row]));
   const mergedTrips = final.trips.map(row => {
     const e = estimateTrips.get(row.trip_id)!;
@@ -367,7 +373,7 @@ export function buildCostsOverview(
       display_open_total: row.display_open_total === null || e.display_open_total === null
         ? null
         : toMoney(Math.round(row.display_open_total * 100) + Math.round(e.display_open_total * 100)),
-      categories: COST_CATEGORIES.filter(key => fCats.has(key) || eCats.has(key)).map(key => {
+      categories: order.filter(key => fCats.has(key) || eCats.has(key)).map(key => {
         const f = fCats.get(key);
         const ec = eCats.get(key);
         return {
@@ -388,7 +394,7 @@ export function buildCostsOverview(
     trips: mergedTrips,
     estimated_total: estimate.total,
     open_total: toMoney(Math.round(final.open_total * 100) + Math.round(estimate.open_total * 100)),
-    categories: COST_CATEGORIES.filter(key => fGlobalCats.has(key) || eGlobalCats.has(key)).map(key => ({
+    categories: order.filter(key => fGlobalCats.has(key) || eGlobalCats.has(key)).map(key => ({
       ...(fGlobalCats.get(key) ?? { category: key, total: 0, people: [], unassigned: 0 }),
       estimated_total: eGlobalCats.get(key)?.total ?? 0,
     })),

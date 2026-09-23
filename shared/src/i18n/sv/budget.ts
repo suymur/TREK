@@ -124,6 +124,19 @@ const budget: TranslationStrings = {
   'costs.cat.fuel': 'Bränsle',
   'costs.cat.parking': 'Parkering',
   'costs.cat.other': 'Annat',
+  'costs.customCat.new': 'Ny kategori',
+  'costs.customCat.edit': 'Redigera kategori',
+  'costs.customCat.name': 'Namn',
+  'costs.customCat.namePlaceholder': 't.ex. Dekoration',
+  'costs.customCat.icon': 'Ikon',
+  'costs.customCat.color': 'Färg',
+  'costs.customCat.shared': 'Alla på den här servern ser egna kategorier och kan använda dem.',
+  'costs.customCat.delete': 'Ta bort kategori',
+  'costs.customCat.deleteConfirm': 'Ta bort ”{name}”? Dess utgifter flyttas till Övrigt, på alla resor.',
+  'costs.customCat.deleted': 'Kategorin togs bort. {count} utgifter flyttades till Övrigt.',
+  'costs.customCat.duplicate': 'Det finns redan en kategori med det namnet.',
+  'costs.customCat.notAllowed': 'Bara den som skapade kategorin eller en administratör kan ändra den.',
+  'costs.customCat.offline': 'Kategorier kan bara ändras när du är online.',
   'costs.daysCount': '{count} dagar',
   'costs.travelers': '{count} resenärer',
   'costs.liveRate': 'realtidspris',
@@ -165,6 +178,7 @@ const budget: TranslationStrings = {
   'costs.noReceipts': 'Inga bifogade kvitton',
   'costs.deleteReceipt': 'Ta bort kvitto',
   'costs.viewReceipt': 'Visa kvitto',
-  'costs.receiptLeftBehind': 'Sparandet misslyckades och {count} uppladdade kvitton finns kvar. Ta bort dem under Filer.',
+  'costs.receiptLeftBehind':
+    'Sparandet misslyckades och {count} uppladdade kvitton finns kvar. Ta bort dem under Filer.',
 };
 export default budget;
